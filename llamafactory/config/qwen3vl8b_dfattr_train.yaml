@@ -1,0 +1,91 @@
+# LoRA 微调：Qwen3-VL-8B-Instruct 在 DeepFashion 属性 JSON 抽取任务上（主线任务）
+# LlamaBoard 0.9.x 分层配置格式 —— 供 WebUI/LlamaBoard 导入使用。
+top.booster: auto
+top.checkpoint_path: []
+top.finetuning_type: lora
+top.model_name: Qwen3-VL-8B-Instruct
+top.quantization_bit: none
+top.quantization_method: bnb
+top.rope_scaling: none
+top.template: qwen3_vl_nothink
+train.additional_target: ''
+train.apollo_rank: 16
+train.apollo_scale: 32
+train.apollo_target: all
+train.apollo_update_interval: 200
+train.badam_mode: layer
+train.badam_switch_interval: 50
+train.badam_switch_mode: ascending
+train.badam_update_ratio: 0.05
+train.batch_size: 4
+train.compute_type: bf16
+train.create_new_adapter: false
+train.cutoff_len: 2048
+train.dataset:
+- deepfashion_attr_json_train
+train.dataset_dir: data/data_convert/deepfashion_multi
+train.ds_offload: false
+train.ds_stage: none
+train.enable_thinking: true   # 保持默认；注意：nothink 模板为普通 Template，此参数仅对 ReasoningTemplate（qwen3_vl）生效，对 nothink 无效
+train.extra_args: '{"optim": "adamw_torch"}'
+train.freeze_extra_modules: ''
+train.freeze_language_model: false
+train.freeze_multi_modal_projector: true
+train.freeze_trainable_layers: 2
+train.freeze_trainable_modules: all
+train.freeze_vision_tower: true
+train.galore_rank: 16
+train.galore_scale: 2
+train.galore_target: all
+train.galore_update_interval: 200
+train.gradient_accumulation_steps: 3   # 3 卡 DDP：等效 batch = 4(每卡) × 3(卡) × 3 = 36（接近设计口径 32；若 OOM 降 batch 2 + accum 5）
+train.hub_private_repo: false
+train.image_max_pixels: 750*1101   # H×W 形式（WebUI 原生格式，calculate_pixels 自动换算为 825,750 像素）；750×1101 即原图尺寸 = 完全不压缩；注意勿用默认的 768*768（589,824 < 原图会被压缩）
+train.image_min_pixels: 32*32
+train.learning_rate: 1e-4
+train.logging_steps: 10
+train.lora_alpha: 32
+train.lora_dropout: 0.05
+train.lora_rank: 16
+train.lora_target: all
+train.loraplus_lr_ratio: 0
+train.lr_scheduler_type: cosine
+train.mask_history: false
+train.max_grad_norm: '1.0'
+train.max_samples: '100000'
+train.neat_packing: false
+train.neftune_alpha: 0
+train.num_train_epochs: '3.0'
+train.packing: false
+train.ppo_score_norm: false
+train.ppo_whiten_rewards: false
+train.pref_beta: 0.1
+train.pref_ftx: 0
+train.pref_loss: sigmoid
+train.project: huggingface
+train.report_to: none
+train.resize_vocab: false
+train.reward_model: []
+train.save_steps: 100   # WebUI 中 eval 频率 = save 频率（eval_steps 强制等于 save_steps），故 val loss 曲线点数 = 总步数/save_steps：2,793/100 ≈ 28 个点（够看清趋势）；代价：全程 28 次 val eval（约多花 30~60 分钟）+ 28 个 checkpoint（LoRA adapter 仅几十 MB，磁盘无压力）；若嫌 eval 开销大可改 200（14 个点）
+train.swanlab_api_key: ''
+train.swanlab_link: null
+train.swanlab_mode: cloud
+train.swanlab_project: llamafactory
+train.swanlab_run_name: ''
+train.swanlab_workspace: ''
+train.trackio_space_id: trackio
+train.train_on_prompt: false
+train.train_seed: '42'
+train.training_stage: Supervised Fine-Tuning
+train.use_apollo: false
+train.use_badam: false
+train.use_dora: false
+train.use_galore: false
+train.use_llama_pro: false
+train.use_pissa: false
+train.use_rslora: false
+train.use_swanlab: false
+train.val_size: 0.05   # WebUI 训练页画 val loss 曲线的唯一途径：从训练集内部随机切 5%（≈1,764 条，按样本，attr_json 一图一样本≈按图切）；与手动 val/test 零重叠，不污染评测；eval loss 为语言建模口径，仅作过拟合监控信号，最终结论仍以 eval_attr.py 在 test 上的属性级指标为准
+train.video_max_pixels: 256*256
+train.video_min_pixels: 16*16
+train.warmup_steps: 150   # ≈5.4% × 2,793 步（val_size 0.05 后训练数据 33,512 条 ÷ 等效 batch 36 = 931 步/epoch × 3 epoch，3 卡 DDP 口径）；warmup 0~10% 均可；单卡跑（accum 8，等效 32）总步约 3,142，warmup 相应改 ≈170

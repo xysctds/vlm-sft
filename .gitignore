@@ -1,0 +1,11 @@
+alpha
+backup
+data
+llamafactory/saves
+llamafactory/eval_outputs
+*.pyc
+llamafactory/results/preds_*.jsonl
+llamafactory/results/eval_*.log
+llamafactory/config/ckpt_screen/ckpt_*.yaml
+llamafactory/llamaboard_cache/
+models/

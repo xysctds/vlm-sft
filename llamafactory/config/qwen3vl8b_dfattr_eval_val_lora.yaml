@@ -1,0 +1,30 @@
+# 正式评测（方案 A）：LoRA 微调后模型在 val 上生成预测（与训练同口径的 llamafactory 管线）
+# 与 qwen3vl8b_dfattr_eval_val_base.yaml 唯一差异：加载 LoRA adapter（最终 checkpoint，与 export 合并所用一致）
+# 运行：llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_eval_val_lora.yaml
+# 之后：python scripts/convert_preds.py --preds <output_dir>/generated_predictions.jsonl \
+#       --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl \
+#       --out llamafactory/results/preds_val_lora.jsonl
+
+stage: sft
+model_name_or_path: ${oc.env:LLM_MODEL_PATH, models/Qwen3-VL-8B-Instruct}
+adapter_name_or_path: llamafactory/saves/dfattr/lora/qwen3vl8b_dfattr_lora
+preprocessing_num_workers: 4   # 两路并行时共 8 个 worker，避免 32 worker × 128 线程过度订阅打爆共享机 CPU（load 800+ 实测）
+finetuning_type: lora
+quantization_method: bnb   # 与训练/WebUI 默认一致；quantization_bit 默认 none => 实际不量化（bf16 加载）
+template: qwen3_vl_nothink
+flash_attn: auto
+dataset_dir: data/data_convert/deepfashion_multi
+eval_dataset: deepfashion_attr_json_val
+cutoff_len: 2048
+max_samples: 100000
+per_device_eval_batch_size: 4
+predict_with_generate: true
+report_to: none
+max_new_tokens: 512
+do_sample: false   # greedy 确定性解码（transformers>=5.8 不接受 temperature=0.0，用 do_sample 声明）
+seed: 42
+image_max_pixels: 825750   # 原图 750×1101 = 825,750 像素，与训练一致（不压缩）
+output_dir: llamafactory/eval_outputs/val_lora
+trust_remote_code: true
+ddp_timeout: 180000000
+do_predict: true

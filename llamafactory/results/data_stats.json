@@ -1,0 +1,115 @@
+{
+  "glasses": {
+    "no": 3759,
+    "sunglasses": 72,
+    "glasses in hand or on clothes": 2
+  },
+  "hat": {
+    "no": 3530,
+    "yes": 508
+  },
+  "lower_clothing_length": {
+    "three-point": 1705,
+    "long": 657,
+    "medium short": 165,
+    "three-quarter": 58
+  },
+  "lower_fabric": {
+    "denim": 1926,
+    "cotton": 1878,
+    "chiffon": 243,
+    "leather": 190,
+    "other": 16,
+    "knitted": 25
+  },
+  "lower_pattern": {
+    "lattice": 74,
+    "pure color": 3357,
+    "graphic": 479,
+    "other": 124,
+    "floral": 156,
+    "color block": 14,
+    "striped": 77
+  },
+  "neckline": {
+    "suspenders": 360,
+    "round": 1671,
+    "lapel": 318,
+    "standing": 83,
+    "V-shape": 293,
+    "square": 19
+  },
+  "neckwear": {
+    "yes": 1343,
+    "no": 2454
+  },
+  "outer_clothing_is_cardigan": {
+    "no": 2508,
+    "yes": 408
+  },
+  "outer_fabric": {
+    "cotton": 344,
+    "chiffon": 33,
+    "knitted": 119,
+    "denim": 38,
+    "leather": 35,
+    "furry": 26,
+    "other": 2
+  },
+  "outer_pattern": {
+    "pure color": 412,
+    "graphic": 95,
+    "floral": 7,
+    "color block": 25,
+    "other": 33,
+    "striped": 8,
+    "lattice": 19
+  },
+  "ring": {
+    "yes": 2538,
+    "no": 1229
+  },
+  "sleeve_length": {
+    "sleeveless": 1684,
+    "long-sleeve": 1400,
+    "short-sleeve": 956,
+    "medium-sleeve": 201,
+    "not long-sleeve": 8
+  },
+  "socks": {
+    "no": 1210,
+    "socks": 93,
+    "leggings": 109
+  },
+  "upper_clothing_covering_navel": {
+    "yes": 2593,
+    "no": 463
+  },
+  "upper_fabric": {
+    "cotton": 3465,
+    "knitted": 247,
+    "chiffon": 503,
+    "denim": 57,
+    "other": 9,
+    "furry": 13,
+    "leather": 10
+  },
+  "upper_pattern": {
+    "graphic": 1299,
+    "pure color": 2296,
+    "other": 141,
+    "floral": 162,
+    "striped": 245,
+    "color block": 92,
+    "lattice": 67
+  },
+  "waist_accessories": {
+    "no": 1807,
+    "clothing at waist": 43,
+    "belt": 146
+  },
+  "wrist_wearing": {
+    "yes": 1746,
+    "no": 2360
+  }
+}
