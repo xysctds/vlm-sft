@@ -13,8 +13,8 @@
 import os
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-VLM = ""  # 相对路径：配置在仓库根运行，直接写仓库内相对路径
-MODEL = "${oc.env:LLM_MODEL_PATH, models/Qwen3-VL-8B-Instruct}"
+VLM = "."  # 相对路径：配置在仓库根运行，直接写仓库内相对路径
+MODEL = "models/Qwen3-VL-8B-Instruct"
 LORA = f"{VLM}/llamafactory/saves/dfattr/lora/qwen3vl8b_dfattr_lora"
 
 SCREEN = [100, 300, 500, 700, 900, 1100, 1300, 1500, 1700, 1900, 2100, 2300, 2500, 2700, 2793]

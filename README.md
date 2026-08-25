@@ -77,15 +77,13 @@ vlm/
 |---|---|---|
 | `lf` | LLaMA-Factory 微调（主线） | `requirements_lf_full.txt`（pip freeze 全量精确版） |
 
-### 模型与路径约定（零绝对路径）
+### 模型与路径约定
 
-仓库内所有路径均为**相对路径**（在仓库根运行即可），不含任何本机绝对路径：
+仓库内路径均为**相对路径**（在仓库根运行即可），不含任何本机绝对路径：
 
 | 项 | 约定 |
 |---|---|
 | 仓库内数据/产物路径 | 相对仓库根（`data/`、`llamafactory/eval_outputs/` 等），直接可用 |
-| 基座模型 | 放到 `models/Qwen3-VL-8B-Instruct`（或设 `LLM_MODEL_PATH` 覆盖） |
+| 基座模型 | 放到 `models/Qwen3-VL-8B-Instruct`（全部训练/评测/导出配置中 `model_name_or_path` 均写此相对路径，在仓库根运行即按本地目录加载） |
 
-唯一环境变量：`LLM_MODEL_PATH`（基座模型目录，默认 `models/Qwen3-VL-8B-Instruct`）。yaml 中用 `${oc.env:LLM_MODEL_PATH, models/Qwen3-VL-8B-Instruct}` 插值（OmegaConf，llamafactory 直接解析）。
-
-发布版使用：把模型下载/软链到 `models/Qwen3-VL-8B-Instruct` 即可（无需改任何配置）；或 `export LLM_MODEL_PATH=/path/to/Qwen3-VL-8B-Instruct`。
+> **注意**：本仓库 llamafactory 的 CLI 用 `OmegaConf.to_container` 读配置，**不解析 `${oc.env:...}` 插值**（OmegaConf 2.3.x 的 `to_container` 默认不 resolve 插值，`${oc.env:LLM_MODEL_PATH, ...}` 会原样传给 HF 导致启动失败），因此配置中**直接写相对路径**、不要用插值写法；换机/发布时把模型软链到仓库 `models/Qwen3-VL-8B-Instruct` 即可（`grep -rn "model_name_or_path" llamafactory/config` 可找到全部位置）。

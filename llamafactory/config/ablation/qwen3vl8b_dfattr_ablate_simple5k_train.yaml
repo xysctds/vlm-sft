@@ -1,7 +1,7 @@
 # 指令范式消融 - simple 5k（基于主训练参数；唯一差异：dataset 用 simple、max_samples 5000）
 stage: sft
 do_train: true
-model_name_or_path: ${oc.env:LLM_MODEL_PATH, models/Qwen3-VL-8B-Instruct}
+model_name_or_path: models/Qwen3-VL-8B-Instruct
 preprocessing_num_workers: 16
 finetuning_type: lora
 template: qwen3_vl_nothink

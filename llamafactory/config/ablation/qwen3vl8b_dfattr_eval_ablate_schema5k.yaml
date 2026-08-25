@@ -6,7 +6,7 @@
 #       --out llamafactory/results/preds_val_lora.jsonl
 
 stage: sft
-model_name_or_path: ${oc.env:LLM_MODEL_PATH, models/Qwen3-VL-8B-Instruct}
+model_name_or_path: models/Qwen3-VL-8B-Instruct
 adapter_name_or_path: llamafactory/saves/ablation/schema_5k
 preprocessing_num_workers: 4   # 两路并行时共 8 个 worker，避免 32 worker × 128 线程过度订阅打爆共享机 CPU（load 800+ 实测）
 finetuning_type: lora

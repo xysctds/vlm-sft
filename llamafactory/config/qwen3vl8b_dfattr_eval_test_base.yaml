@@ -6,7 +6,7 @@
 #       --out llamafactory/results/preds_val_base.jsonl
 
 stage: sft
-model_name_or_path: ${oc.env:LLM_MODEL_PATH, models/Qwen3-VL-8B-Instruct}
+model_name_or_path: models/Qwen3-VL-8B-Instruct
 preprocessing_num_workers: 4   # 两路并行时共 8 个 worker，避免 32 worker × 128 线程过度订阅打爆共享机 CPU（load 800+ 实测）
 finetuning_type: lora   # 与 WebUI 默认一致；无 adapter_name_or_path 时即加载纯 base（loader 仅在 adapter 非空时走 PeftModel 分支），与 lora 配置的唯一差异就是 adapter
 quantization_method: bnb   # 与训练/WebUI 默认一致；quantization_bit 默认 none => 实际不量化（bf16 加载）

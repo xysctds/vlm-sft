@@ -1,7 +1,7 @@
 ### 注意：合并 LoRA adapter 时不要用量化模型或 quantization_bit
 
 ### 模型
-model_name_or_path: ${oc.env:LLM_MODEL_PATH, models/Qwen3-VL-8B-Instruct}
+model_name_or_path: models/Qwen3-VL-8B-Instruct
 adapter_name_or_path: llamafactory/saves/dfattr/lora/qwen3vl8b_dfattr_lora
 template: qwen3_vl_nothink
 trust_remote_code: true

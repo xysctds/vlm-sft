@@ -4,7 +4,7 @@
 # 之后：convert + stats 与 preds_val_lora.jsonl（不压缩，attr acc 93.4%）对比
 
 stage: sft
-model_name_or_path: ${oc.env:LLM_MODEL_PATH, models/Qwen3-VL-8B-Instruct}
+model_name_or_path: models/Qwen3-VL-8B-Instruct
 adapter_name_or_path: llamafactory/saves/dfattr/lora/qwen3vl8b_dfattr_lora
 preprocessing_num_workers: 4
 finetuning_type: lora
