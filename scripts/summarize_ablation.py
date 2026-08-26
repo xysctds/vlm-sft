@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""指令范式消融汇总：schema-5k vs simple-5k vs 主模型（schema-35k，val 全量）。"""
+"""指令范式（schema/simple）× 数据量（5k/20k/35k）二维消融汇总，val 全量 4410 条。
+主模型 = schema-35k（全量）；simple-35k/20k 为 2026-08-26 新补跑的两组。"""
 import json
 import os
 import sys
@@ -34,22 +35,39 @@ def load_lf_preds(pred_path: str) -> list[dict]:
     return preds
 
 models = {
-    "主模型 schema-35k（全量）": main_preds,
+    "schema-35k": main_preds,
+    "schema-20k": load_lf_preds(f"{BASE}/llamafactory/eval_outputs/ablate_schema20k/generated_predictions.jsonl"),
     "schema-5k": load_lf_preds(f"{BASE}/llamafactory/eval_outputs/ablate_schema5k/generated_predictions.jsonl"),
+    "simple-35k": load_lf_preds(f"{BASE}/llamafactory/eval_outputs/ablate_simple35k/generated_predictions.jsonl"),
+    "simple-20k": load_lf_preds(f"{BASE}/llamafactory/eval_outputs/ablate_simple20k/generated_predictions.jsonl"),
     "simple-5k": load_lf_preds(f"{BASE}/llamafactory/eval_outputs/ablate_simple5k/generated_predictions.jsonl"),
 }
 
-lines = ["# 指令范式消融（val 全量 4410 条）\n"]
+# 预计算各模型汇总，供表格与对比行复用
+sums = {name: summarize(preds) for name, preds in models.items()}
+sc35, sc20, sc5 = sums["schema-35k"], sums["schema-20k"], sums["schema-5k"]
+sm35, sm20, sm5 = sums["simple-35k"], sums["simple-20k"], sums["simple-5k"]
+
+MAIN = "schema-35k"  # 最终主模型（全量训练），表格中整行加粗
+
+lines = ["# 指令范式 + 数据量消融（val 全量 4410 条）\n"]
 lines.append("| 模型 | n | attr acc | macro-F1 | parse | full-match |")
 lines.append("|---|---|---|---|---|---|")
-main_s = summarize(main_preds)
-for name, preds in models.items():
-    s = summarize(preds)
-    lines.append(f"| {name} | {s['n']} | {s['attr_acc']:.1%} | {s['macro_f1']:.3f} | {s['parse_rate']:.1%} | {s['full_match_rate']:.1%} |")
-lines.append(f"\n- schema-5k vs simple-5k（同数据量，唯一变量=指令范式）：Δ attr acc = "
-             f"{summarize(models['schema-5k'])['attr_acc'] - summarize(models['simple-5k'])['attr_acc']:+.1%}")
-lines.append(f"- schema-5k vs 主模型 schema-35k（同指令，唯一变量=数据量）：Δ attr acc = "
-             f"{summarize(models['schema-5k'])['attr_acc'] - main_s['attr_acc']:+.1%}")
+for name in models:
+    s = sums[name]
+    cells = [name, str(s["n"]), f"{s['attr_acc']:.1%}", f"{s['macro_f1']:.3f}",
+             f"{s['parse_rate']:.1%}", f"{s['full_match_rate']:.1%}"]
+    if name == MAIN:
+        cells = [f"**{c}**" for c in cells]
+    lines.append("| " + " | ".join(cells) + " |")
+
+lines.append("\n**数据量消融（同指令，唯一变量=数据量）**")
+lines.append(f"- schema：5k→20k Δ attr acc = {sc20['attr_acc'] - sc5['attr_acc']:+.1%}，20k→35k Δ = {sc35['attr_acc'] - sc20['attr_acc']:+.1%}")
+lines.append(f"- simple：5k→20k Δ attr acc = {sm20['attr_acc'] - sm5['attr_acc']:+.1%}，20k→35k Δ = {sm35['attr_acc'] - sm20['attr_acc']:+.1%}")
+lines.append("\n**指令范式消融（同数据量，唯一变量=指令范式）**")
+lines.append(f"- 5k：schema vs simple Δ attr acc = {sc5['attr_acc'] - sm5['attr_acc']:+.1%}")
+lines.append(f"- 20k：schema vs simple Δ attr acc = {sc20['attr_acc'] - sm20['attr_acc']:+.1%}")
+lines.append(f"- 35k：schema vs simple Δ attr acc = {sc35['attr_acc'] - sm35['attr_acc']:+.1%}")
 
 out = f"{BASE}/llamafactory/results/report_ablation.md"
 with open(out, "w", encoding="utf-8") as fh:

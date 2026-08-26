@@ -1,0 +1,49 @@
+# 指令范式消融：simple 20k（simple 指令 + 20k 子集；基于 simple-5k 参数，唯一差异 = 数据量 20k）
+# 与 schema-20k 同口径：warmup 80 = 20k×3epoch ≈ 1,583 步 × 5%（schema-20k 同为 80）
+# 运行：llamafactory-cli train llamafactory/config/ablation/qwen3vl8b_dfattr_ablate_simple20k_train.yaml
+
+stage: sft
+do_train: true
+model_name_or_path: models/Qwen3-VL-8B-Instruct
+preprocessing_num_workers: 16
+finetuning_type: lora
+template: qwen3_vl_nothink
+flash_attn: auto
+dataset_dir: data/data_convert/deepfashion_multi
+dataset: deepfashion_attr_json_simple_train
+cutoff_len: 2048
+learning_rate: 0.0001
+num_train_epochs: 3.0
+max_samples: 20000
+seed: 42
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 3   # 3 卡 DDP 等效 batch 36（4×3×3，与主训练完全一致）
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
+logging_steps: 10
+save_steps: 1000   # 消融只需最终模型
+warmup_steps: 80   # 20k 3 epoch ≈ 1,583 步，warmup ~5%（与 schema-20k 同口径）
+packing: false
+enable_thinking: true
+report_to: none
+output_dir: llamafactory/saves/ablation/simple_20k
+bf16: true
+plot_loss: true
+trust_remote_code: true
+ddp_timeout: 180000000
+include_num_input_tokens_seen: true
+optim: adamw_torch
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+image_max_pixels: 825750
+image_min_pixels: 1024
+video_max_pixels: 65536
+video_min_pixels: 256
+val_size: 0.05
+eval_strategy: steps
+eval_steps: 100
+per_device_eval_batch_size: 4

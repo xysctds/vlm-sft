@@ -246,15 +246,14 @@ python scripts/check_data.py
 
 | 实验 | 变量 | 变更方式 |
 |---|---|---|
-| **指令范式** | schema vs simple 训练指令 | `dataset: deepfashion_attr_json_simple_train`（5k 子集双模型） |
-| **数据量** | 5k vs 20k vs 35.3k | `max_samples: 5000`（20k 为可选中间点） |
+| **指令范式 × 数据量** | schema vs simple 训练指令 × 5k/20k/35.3k | 同一组 6 配置（schema/simple × 5k/20k/35k），双轴解读：指令轴（列内）=指令范式、数据轴（行内）=数据量 |
 | **LoRA 秩** | r ∈ {8, 16, 32} | `lora_rank: 8`（可选） |
 
 #### 边界论证：效果依赖与鲁棒性
 
 | 实验 | 变量 | 做法 |
 |---|---|---|
-| **指令鲁棒性** | 推理期指令 | 同一模型换 simple prompt 评测，检验运行期依赖 |
+| **指令鲁棒性** | 推理期指令 | 同一模型换 simple prompt 评测，检验运行期依赖；与归因"指令范式"互补（归因换训练指令=方法收益，此处换推理指令=运行依赖） |
 | **few-shot 对照** | 示例数量 | 基座 + 2 个 in-context 示例，回答"为什么微调不 few-shot" |
 | **图像分辨率** | 评测输入分辨率 | `image_max_pixels` 589,824 vs 825,750（推理端） |
 
