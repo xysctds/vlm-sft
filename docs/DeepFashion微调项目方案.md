@@ -350,15 +350,24 @@ python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jso
 ## 11. 部署与 Demo
 
 ```bash
-# 合并 adapter（llamafactory/config/qwen3vl8b_dfattr_export_cli.yaml）
+# 1) 合并 adapter（llamafactory/config/qwen3vl8b_dfattr_export_cli.yaml）
 llamafactory-cli export llamafactory/config/qwen3vl8b_dfattr_export_cli.yaml
-# vLLM 服务（需 pip install vllm）
-vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged --served-model-name deepfashion --port 8000
-# demo 客户端（另开终端）：传一张没见过的图 → 输出结构化 JSON
-python scripts/serve_demo.py --image /path/to/never_seen.jpg
+
+# 2) vLLM 服务（独立 vllm 环境；须在仓库根目录运行，且显式设置 CUDA_HOME）
+conda activate vllm
+export CUDA_HOME=/home/maotai/.conda/envs/vllm/lib/python3.11/site-packages/nvidia/cu13
+VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged \
+    --served-model-name deepfashion --port 8000 --gpu-memory-utilization 0.55 \
+    --max-model-len 131072 --tensor-parallel-size 2   # 多卡 TP=2 + 128k；单卡去掉 TP 参数并把 max-model-len 改 32768
+
+# 3) demo（另开终端）：传一张没见过的图 → 输出结构化 JSON
+python scripts/serve_demo.py --image /path/to/never_seen.jpg   # CLI
+python scripts/serve_gradio.py                                 # Web 页面 → http://127.0.0.1:7860
 ```
 
-演示重点：**微调前（输出乱/属性错）vs 微调后（稳定 JSON、属性准）同图对比**——最有冲击力；时间富余可加 Gradio 页面。
+演示重点：**微调前（输出乱/属性错）vs 微调后（稳定 JSON、属性准）同图对比**——最有冲击力；Web 页面支持 schema/simple 模板切换与 prompt 手动编辑，可现场演示「朴素指令 vs schema 指令」的差异（消融中 +31.5pp 的关键方法）。
+
+> 环境安装、单卡/多卡参数、API 对接示例（OpenAI 兼容）与全部踩坑记录见 `docs/部署说明.md`。
 
 ---
 
@@ -376,7 +385,7 @@ python scripts/serve_demo.py --image /path/to/never_seen.jpg
 | 6 | 消融与对照（论证链四环，见 §8.3） | 效果：主结果、品类分层；归因：指令范式、数据量（20k 中间点 / LoRA 秩可选）；边界：指令鲁棒性、few-shot、图像分辨率；过程：Checkpoint 选择 | 各 `report_*.md` |
 | 7 | badcase 分析 | 错例归类归因（类别混淆 / 小物件漏检 / 漏键）；选 1~2 个高性价比对策 | badcase 报告 |
 | 8 | 改进闭环（可选） | 补数据 / 改 prompt / 模板化输出 → 复训 → 同口径再评测 | 指标再提升 |
-| 9 | 部署 demo | vLLM serve + `serve_demo.py` 客户端；微调前后同图对比 | 部署 demo |
+| 9 | 部署 demo | vLLM serve（单卡/多卡）+ `serve_demo.py` CLI 与 `serve_gradio.py` Web 页面；微调前后同图对比 | 部署 demo（CLI + Web） |
 | 10 | 简历与开源化 | 简历定稿（§14 模板）；15 分钟叙事演练；GitHub/HF + 技术博客 | 项目交付 |
 
 
@@ -390,7 +399,9 @@ python scripts/serve_demo.py --image /path/to/never_seen.jpg
 | `scripts/check_data.py` | 数据质量四关卡 |
 | `scripts/eval_attr.py` | 评测打分：`stats`（属性级 acc / macro-F1 / 分层 / McNemar）；预测生成走 llamafactory 管线（见 9.3） |
 | `scripts/convert_preds.py` | 把 llamafactory predict 输出（generated_predictions.jsonl）转为 `eval_attr.py stats` 可消费的预测文件 |
-| `scripts/serve_demo.py` | vLLM demo 客户端 |
+| `scripts/serve_demo.py` | vLLM demo 客户端（CLI） |
+| `scripts/serve_gradio.py` | Gradio Web demo（模板切换 + prompt 手动编辑） |
+| `docs/部署说明.md` | 部署文档：环境准备、单卡/多卡启动、API 示例、踩坑记录 |
 | `llamafactory/config/` | 训练/评测/导出配置（`ablation/`、`ckpt_screen/` 子目录） |
 | `llamafactory/saves/` | 模型权重与训练/调度日志（LoRA adapter / merged；软链至 /disk16T1） |
 | `llamafactory/eval_outputs/` | 评测生成预测（`generated_predictions.jsonl` 等，按实验分目录） |
@@ -452,8 +463,10 @@ python scripts/convert_preds.py --preds llamafactory/eval_outputs/val_lora/gener
 python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jsonl \
     --lora llamafactory/results/preds_val_lora.jsonl --out llamafactory/results/report_val.md
 
-# 部署
+# 部署（完整命令与环境准备见 §11 与 docs/部署说明.md）
 llamafactory-cli export llamafactory/config/qwen3vl8b_dfattr_export_cli.yaml
-vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged --served-model-name deepfashion --port 8000
+conda activate vllm && export CUDA_HOME=/home/maotai/.conda/envs/vllm/lib/python3.11/site-packages/nvidia/cu13
+VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged \
+    --served-model-name deepfashion --port 8000 --max-model-len 32768
 python scripts/serve_demo.py --image <path/to/test.jpg>
 ```

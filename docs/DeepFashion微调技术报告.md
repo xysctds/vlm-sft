@@ -67,23 +67,38 @@
 
 ### 2.4 schema 感知指令（方法核心）
 
-训练/评测共用同一指令模板，枚举全部合法键与取值，并给出输出规则：
+训练/评测共用同一指令模板（`scripts/data_convert_deepfashion_multi.py::build_schema_prompt()` 自动生成，完整原文）：
 
 ```
 Extract the clothing attributes visible in this image and output a JSON object.
 
 Allowed keys and values:
-- sleeve_length: sleeveless, short-sleeve, medium-sleeve, long-sleeve
+- sleeve_length: sleeveless, short-sleeve, medium-sleeve, long-sleeve, not long-sleeve
 - lower_clothing_length: three-point, medium short, three-quarter, long
 - socks: no, socks, leggings
 - hat: no, yes
-...（全部 18 个键的取值枚举）...
+- glasses: no, eyeglasses, sunglasses, glasses in hand or on clothes
+- neckwear: no, yes
+- wrist_wearing: no, yes
+- ring: no, yes
+- waist_accessories: no, belt, clothing at waist
+- neckline: V-shape, square, round, standing, lapel, suspenders
+- outer_clothing_is_cardigan: yes, no
+- upper_clothing_covering_navel: no, yes
+- upper_fabric: denim, cotton, leather, furry, knitted, chiffon, other
+- upper_pattern: floral, graphic, striped, pure color, lattice, other, color block
+- lower_fabric: denim, cotton, leather, furry, knitted, chiffon, other
+- lower_pattern: floral, graphic, striped, pure color, lattice, other, color block
+- outer_fabric: denim, cotton, leather, furry, knitted, chiffon, other
+- outer_pattern: floral, graphic, striped, pure color, lattice, other, color block
 
 Rules:
 - Include only keys whose attribute is clearly visible in the image.
 - Use only the allowed values listed above.
 - Output the JSON object only, without any extra text or explanation.
 ```
+
+结构：① 任务句（一句指令）；② **Allowed keys and values**——枚举全部 18 个属性键及每键合法取值（shape 12 键 + upper/lower/outer 三部位 × fabric/pattern 6 键）；③ **Rules** 三条输出规则（只输出可见属性 / 只用合法取值 / 只输出 JSON 不加解释）。指令由官方属性表自动生成，键与取值顺序稳定，保证训练/评测/推理三端完全一致。
 
 设计动机：**键名/取值不漂移、格式错误率下降**——这是结构化输出任务中行业标准的工程做法，其收益将在 §5.2 由消融实验量化验证。对照版（simple）为朴素一句话指令："Extract the clothing attributes visible in this image and output them as JSON."
 
@@ -284,16 +299,16 @@ Rules:
 | 袖长 | `medium-sleeve → long-sleeve` | 76 | 细粒度边界（中袖 vs 长袖） |
 | 腰饰 | `waist_accessories: no → 缺键` | 74 | 输出完整性（漏键） |
 
-**典型错误样本示例**（val 集，图片路径见 `data/data_convert/deepfashion_multi/`）：
+**典型错误样本示例**（val 集，对应图片已复制至 `docs/badcase_samples/`，可直接打开查看）：
 
 | 属性 | 真值 | 预测 | 样本图片 | 错误类型 |
 |---|---|---|---|---|
-| ring | yes | no | `images/WOMEN-Tees_Tanks-id_00006297-09_2_side.jpg` | 小物件漏检 |
-| upper_fabric | chiffon | cotton | `images/WOMEN-Dresses-id_00003255-01_2_side.jpg` | 面料混淆 |
-| sleeve_length | medium-sleeve | long-sleeve | `images/WOMEN-Blouses_Shirts-id_00004948-03_3_back.jpg` | 细粒度边界 |
-| neckwear | yes | no | `images/WOMEN-Tees_Tanks-id_00005040-02_1_front.jpg` | 小物件漏检 |
-| upper_pattern | graphic | pure color | `images/WOMEN-Tees_Tanks-id_00001025-03_2_side.jpg` | 图案细节丢失 |
-| lower_fabric | denim | cotton | `images/WOMEN-Tees_Tanks-id_00000532-01_2_side.jpg` | 面料混淆 |
+| ring | yes | no | `docs/badcase_samples/WOMEN-Tees_Tanks-id_00006297-09_2_side.jpg` | 小物件漏检 |
+| upper_fabric | chiffon | cotton | `docs/badcase_samples/WOMEN-Dresses-id_00003255-01_2_side.jpg` | 面料混淆 |
+| sleeve_length | medium-sleeve | long-sleeve | `docs/badcase_samples/WOMEN-Blouses_Shirts-id_00004948-03_3_back.jpg` | 细粒度边界 |
+| neckwear | yes | no | `docs/badcase_samples/WOMEN-Tees_Tanks-id_00005040-02_1_front.jpg` | 小物件漏检 |
+| upper_pattern | graphic | pure color | `docs/badcase_samples/WOMEN-Tees_Tanks-id_00001025-03_2_side.jpg` | 图案细节丢失 |
+| lower_fabric | denim | cotton | `docs/badcase_samples/WOMEN-Tees_Tanks-id_00000532-01_2_side.jpg` | 面料混淆 |
 
 ### 6.3 归因与改进方向
 
@@ -343,4 +358,5 @@ Rules:
 | Checkpoint 报告 | `llamafactory/results/report_ckpt_screen.md`（快筛曲线）/ `report_ckpt_confirm.md`（top3 全量确认） |
 | 分辨率报告 | `llamafactory/results/report_resolution.md` |
 | 补充实验产物 | `llamafactory/results/report_category.md`（品类分层）/ `report_supplement.md`（指令鲁棒性 + few-shot） |
-| 部署 | `llamafactory-cli export`（merge）→ `vllm serve` → `python scripts/serve_demo.py` |
+| 部署 | `llamafactory-cli export`（merge）→ `vllm serve` → `python scripts/serve_demo.py`（CLI）／`python scripts/serve_gradio.py`（Web） |
+| 部署文档 | `docs/部署说明.md`（环境准备、单卡/多卡启动、API 示例、踩坑记录） |

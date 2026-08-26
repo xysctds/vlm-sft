@@ -14,7 +14,7 @@
 - 18 个属性全部通过 McNemar 显著性检验（p<0.001）；
 - 消融证明 **schema 感知指令是决定性方法**（同数据下比朴素指令 +31.5pp）、训练无过拟合、推理对分辨率鲁棒；
 
-📄 **文档**：[项目策划案](docs/DeepFashion微调项目方案.md) ｜ [技术报告](docs/DeepFashion微调技术报告.md) ｜ [数据说明](docs/数据说明.md) ｜ [调参说明](docs/调参说明.md)
+📄 **文档**：[项目策划案](docs/DeepFashion微调项目方案.md) ｜ [技术报告](docs/DeepFashion微调技术报告.md) ｜ [部署说明](docs/部署说明.md) ｜ [数据说明](docs/数据说明.md) ｜ [调参说明](docs/调参说明.md)
 
 ---
 
@@ -23,7 +23,7 @@
 ```
 vlm/
 ├── data/ -> /disk16T1/scratch/maotai/data/vlm_data   # 数据集（软链）
-├── docs/                   # 方案策划案 + 技术报告 + 数据/调参说明
+├── docs/                   # 方案策划案 + 技术报告 + 部署说明 + 数据/调参说明
 ├── llamafactory/           # 工作文件夹（训练配置、评测产物、模型权重）
 ├── requirements_lf_full.txt # lf 环境依赖（pip freeze 全量精确版，可直接复现）
 └── scripts/                # 数据转换 / 评测打分 / 报告生成 / 部署脚本
@@ -41,6 +41,7 @@ vlm/
 
 - `DeepFashion微调项目方案.md`：**主线项目策划案**（可单独拿出去投递/展示）——完整给出数据、任务、方法、评测、消融、部署的规划与设计依据。
 - `DeepFashion微调技术报告.md`：**主线成果技术报告**——实际执行结果、实验数据与论证链（效果/归因/边界/过程四环），与策划案成对。
+- `部署说明.md`：**服务化部署手册**——环境准备、单卡/多卡（TP=2 + 128k）启动命令、OpenAI 兼容 API 示例、Gradio Web 页面用法、全部踩坑记录。
 - `DeepFashion属性对照表.md`：18 维属性体系与取值对照（数据口径速查）。
 - `数据说明.md`：数据转换与 LLaMA-Factory 接入说明。
 - `调参说明.md`：训练超参与调参经验记录。
@@ -62,7 +63,8 @@ vlm/
 - `eval_attr.py`：评测打分 `stats`（属性级 acc / macro-F1 / 分层 / McNemar，容错解析）；预测生成走 llamafactory 管线。
 - `convert_preds.py`：把 llamafactory 预测输出（`generated_predictions.jsonl`）转为 `eval_attr.py stats` 可消费格式。
 - `summarize_ablation.py` / `summarize_category.py` / `summarize_ckpts.py` / `summarize_confirm.py` / `summarize_resolution.py` / `summarize_supplement.py`：报告生成（分别对应消融、品类分层、checkpoint 快筛/确认、分辨率、补充实验报告）。
-- `serve_demo.py`：DeepFashion 部署 demo 客户端（vLLM OpenAI 兼容）。
+- `serve_demo.py`：DeepFashion 部署 demo 客户端（CLI，vLLM OpenAI 兼容）。
+- `serve_gradio.py`：DeepFashion 部署 Web 页面（Gradio，模板切换 + prompt 手动编辑，浏览器传图看结构化 JSON）。
 
 ### 根目录文件
 - `requirements_lf_full.txt`：lf 环境全量依赖（pip freeze 精确版本，`pip install -r` 可直接复现环境）。
@@ -71,11 +73,14 @@ vlm/
 
 ## 环境
 
-项目用 conda 管理两套隔离环境，对应根目录两个依赖文件：
+项目用 conda 管理两套隔离环境：
 
-| 环境名 | 用途 | 依赖文件 |
+| 环境名 | 用途 | 依赖 |
 |---|---|---|
-| `lf` | LLaMA-Factory 微调（主线） | `requirements_lf_full.txt`（pip freeze 全量精确版） |
+| `lf` | LLaMA-Factory 微调/评测（主线） | `requirements_lf_full.txt`（pip freeze 全量精确版） |
+| `vllm` | 部署（克隆自 lf + `pip install vllm`，不污染训练环境） | 复现步骤见 `docs/部署说明.md` §2 |
+
+> `vllm` 环境无独立依赖文件，按部署说明 §2 克隆 lf 后安装 vllm 0.27.1 + 升级 flashinfer 即可。
 
 ### 模型与路径约定
 
