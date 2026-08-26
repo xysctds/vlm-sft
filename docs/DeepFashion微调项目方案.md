@@ -353,10 +353,11 @@ python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jso
 # 1) 合并 adapter（llamafactory/config/qwen3vl8b_dfattr_export_cli.yaml）
 llamafactory-cli export llamafactory/config/qwen3vl8b_dfattr_export_cli.yaml
 
-# 2) vLLM 服务（独立 vllm 环境；须在仓库根目录运行，且显式设置 CUDA_HOME）
+# 2) vLLM 服务（推荐用一键脚本 bash scripts/start_vllm.sh；手动则须在仓库根目录且设置环境变量）
 conda activate vllm
 export CUDA_HOME=/home/maotai/.conda/envs/vllm/lib/python3.11/site-packages/nvidia/cu13
-VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged \
+export VLLM_USE_FLASHINFER_SAMPLER=0   # 必须禁用 flashinfer 采样器（见部署说明 §6.4）
+vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged \
     --served-model-name deepfashion --port 8000 --gpu-memory-utilization 0.55 \
     --max-model-len 131072 --tensor-parallel-size 2   # 多卡 TP=2 + 128k；单卡去掉 TP 参数并把 max-model-len 改 32768
 
@@ -401,6 +402,7 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 | `scripts/convert_preds.py` | 把 llamafactory predict 输出（generated_predictions.jsonl）转为 `eval_attr.py stats` 可消费的预测文件 |
 | `scripts/serve_demo.py` | vLLM demo 客户端（CLI） |
 | `scripts/serve_gradio.py` | Gradio Web demo（模板切换 + prompt 手动编辑） |
+| `scripts/start_vllm.sh` | vLLM 一键启动脚本（封装 CUDA_HOME / flashinfer 禁用等环境准备，单卡/多卡切换） |
 | `docs/部署说明.md` | 部署文档：环境准备、单卡/多卡启动、API 示例、踩坑记录 |
 | `llamafactory/config/` | 训练/评测/导出配置（`ablation/`、`ckpt_screen/` 子目录） |
 | `llamafactory/saves/` | 模型权重与训练/调度日志（LoRA adapter / merged；软链至 /disk16T1） |
