@@ -14,7 +14,7 @@
 - 18 个属性全部通过 McNemar 显著性检验（p<0.001）；
 - 消融证明 **schema 感知指令是决定性方法**（同数据下比朴素指令 +31.5pp）、训练无过拟合、推理对分辨率鲁棒；
 
-📄 **文档**：[项目策划案](docs/DeepFashion微调项目方案.md) ｜ [技术报告](docs/DeepFashion微调技术报告.md) ｜ [部署说明](docs/部署说明.md) ｜ [数据说明](docs/数据说明.md) ｜ [调参说明](docs/调参说明.md)
+📄 **文档**：[项目策划案](docs/DeepFashion微调项目方案.md) ｜ [技术报告](docs/DeepFashion微调技术报告.md) ｜ [部署说明](docs/部署说明.md) ｜ [数据说明](docs/数据说明.md) ｜ [调参说明](docs/调参说明.md) ｜ [检索/推荐闭环方案](docs/检索推荐方案.md)
 
 ---
 
@@ -64,8 +64,11 @@ vlm/
 - `convert_preds.py`：把 llamafactory 预测输出（`generated_predictions.jsonl`）转为 `eval_attr.py stats` 可消费格式。
 - `summarize_ablation.py` / `summarize_category.py` / `summarize_ckpts.py` / `summarize_confirm.py` / `summarize_resolution.py` / `summarize_supplement.py`：报告生成（分别对应消融、品类分层、checkpoint 快筛/确认、分辨率、补充实验报告）。
 - `serve_demo.py`：DeepFashion 部署 demo 客户端（CLI，vLLM OpenAI 兼容）。
-- `serve_gradio.py`：DeepFashion 部署 Web 页面（Gradio，模板切换 + prompt 手动编辑，浏览器传图看结构化 JSON）。
+- `serve_gradio.py`：DeepFashion 部署 Web 页面（Gradio，模板切换 + prompt 手动编辑，浏览器传图看结构化 JSON + **相似款检索**）。
+- `build_retrieval_index.py`：构建检索索引（官方标注聚合 + 冻结视觉塔抽 embedding）→ `data/.../retrieval/index_vectors.npy` + `index_meta.json`。
+- `retrieval.py`：相似款检索（视觉余弦 + 官方属性命中率混合加权，top-k + 同款排重），含库内自检。
 - `start_vllm.sh`：vLLM 一键启动脚本（封装 CUDA_HOME / flashinfer 禁用等环境准备，支持单卡/多卡切换）。
+- `start_web.sh`：**Web demo 一键启动**（vLLM + Gradio 全自动：环境准备、GPU 分卡避让、健康检查、日志、`--stop`/`--status`）。
 
 ### 根目录文件
 - `requirements_lf_full.txt`：lf 环境全量依赖（pip freeze 精确版本，`pip install -r` 可直接复现环境）。
