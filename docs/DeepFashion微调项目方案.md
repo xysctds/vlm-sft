@@ -1,8 +1,8 @@
-# DeepFashion 微调项目方案
+# DeepFashion 服装属性提取与相似款检索项目方案
 
 > **文档性质**：本方案为**独立成文的项目技术方案书**，内容自包含（数据、代码、配置、命令均全文给出，无需依赖其他文档），可直接用于岗位投递附件、面试前置材料或作品集展示。
 >
-> **一句话项目定位**：基于 Qwen3-VL-8B-Instruct，用 LLaMA-Factory 对 DeepFashion-MultiModal 时装数据集（SIGGRAPH 2022，4.4 万图、18 维官方标注属性）做 LoRA 微调，实现「服装全身图 → 结构化属性 JSON」抽取，配套自建评测体系（属性级指标 + 分层统计 + McNemar 显著性 + 容错解析）与 vLLM 部署 demo，对标电商货架属性/商品知识图谱场景。
+> **一句话项目定位**：基于 Qwen3-VL-8B-Instruct，用 LLaMA-Factory 对 DeepFashion-MultiModal 时装数据集（SIGGRAPH 2022，4.4 万图、18 维官方标注属性）做 LoRA 微调，实现「服装全身图 → 结构化属性 JSON」抽取，配套自建评测体系（属性级指标 + 分层统计 + McNemar 显著性 + 容错解析）与 vLLM 部署 demo；并在抽取结果之上落地**相似款检索推荐**（属性 + 视觉混合加权，全库 top-k 相似款），升级为「电商标注 + 相似款推荐」完整闭环，对标电商货架属性 / 商品知识图谱 / 相似款推荐场景。
 
 ---
 
@@ -42,8 +42,8 @@
 
 **三个核心卖点**：
 
-1. **业务贴合**——服装属性抽取是电商/内容平台真实业务（货架属性、商品知识图谱、搜索标签），价值一句话讲清；
-2. **区分度**——ChartQA 微调是烂大街模板；"DeepFashion + VLM 微调 + 结构化属性抽取"组合几乎无人做；
+1. **业务贴合**——「结构化属性抽取 + 相似款检索推荐」覆盖电商核心链路（货架属性、搜索召回、商品知识图谱、相似款推荐），价值一句话讲清；
+2. **区分度**——ChartQA 微调是烂大街模板；"DeepFashion + VLM 微调 + 结构化属性抽取 + 相似款检索"完整闭环几乎无人做；
 3. **严谨评测**——数据集无官方指标 → 自建完整评测体系，反而展示方法论能力（对比组纪律、分层、显著性检验）。
 
 **文档定位**：本文件为项目**策划案**——完整给出数据、任务、方法、评测、消融、部署的规划与设计依据，可作为岗位投递附件/面试前置材料。
@@ -60,10 +60,10 @@
 
 | 验收项 | 标准 |
 |---|---|
-| 全流程跑通 | 数据 → 微调 → 评测 → 部署 四段齐全，脚本可复现 |
+| 全流程跑通 | 数据 → 微调 → 评测 → 部署 → 相似款检索 全链路齐全，脚本可复现 |
 | 量化提升 | 微调后 vs 基座 0-shot，属性级准确率提升 ≥10pp（细粒度属性基线低、收益空间大），macro-F1 同步提升，McNemar p<0.05 |
 | 结构化输出稳定 | 评测集 JSON 可解析率 ≥98%（格式错误单独统计） |
-| 交付物 | 训练配置 / 评测报告（含消融矩阵）/ badcase 报告 / 部署 demo / 简历表述 五类齐全 |
+| 交付物 | 训练配置 / 评测报告（含消融矩阵）/ badcase 报告 / 部署 demo（含相似款检索）/ 检索方案 / 简历表述 六类齐全 |
 | 面试可讲 | 连续讲 15 分钟：动机、数据、方法、结果、失败分析 |
 
 ---
@@ -370,6 +370,8 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 
 > 环境安装、单卡/多卡参数、API 对接示例（OpenAI 兼容）与全部踩坑记录见 `docs/部署说明.md`。
 
+> **相似款推荐（主线闭环）**：主线 demo 的终点（属性 JSON）已是相似款检索的起点——`serve_gradio.py` 在属性抽取基础上集成**全库相似款 Gallery**（复用主线视觉塔抽查询 embedding + 官方属性约束加权，匹配分直接标在图上）。检索索引构建 / 检索脚本与完整方案见 `docs/检索推荐方案.md`、`scripts/build_retrieval_index.py`、`scripts/retrieval.py`，一键启动见 `scripts/start_web.sh`。
+
 ---
 
 ## 12. 步骤规划（按环节）
@@ -401,9 +403,13 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 | `scripts/eval_attr.py` | 评测打分：`stats`（属性级 acc / macro-F1 / 分层 / McNemar）；预测生成走 llamafactory 管线（见 9.3） |
 | `scripts/convert_preds.py` | 把 llamafactory predict 输出（generated_predictions.jsonl）转为 `eval_attr.py stats` 可消费的预测文件 |
 | `scripts/serve_demo.py` | vLLM demo 客户端（CLI） |
-| `scripts/serve_gradio.py` | Gradio Web demo（模板切换 + prompt 手动编辑） |
+| `scripts/serve_gradio.py` | Gradio Web demo（模板切换 + prompt 手动编辑；含相似款检索 Gallery） |
+| `scripts/build_retrieval_index.py` | 检索索引构建（官方标注聚合 + 视觉塔抽 embedding + 多卡分片） |
+| `scripts/retrieval.py` | 相似款检索（视觉+属性混合加权；只加载视觉塔 + 缓存 + 预热） |
 | `scripts/start_vllm.sh` | vLLM 一键启动脚本（封装 CUDA_HOME / flashinfer 禁用等环境准备，单卡/多卡切换） |
+| `scripts/start_web.sh` | Web demo 一键启动（vLLM + Gradio 全自动：GPU 分卡避让 / 健康检查） |
 | `docs/部署说明.md` | 部署文档：环境准备、单卡/多卡启动、API 示例、踩坑记录 |
+| `docs/检索推荐方案.md` | 检索/推荐闭环方案（相似款推荐，主线 demo 的延伸） |
 | `llamafactory/config/` | 训练/评测/导出配置（`ablation/`、`ckpt_screen/` 子目录） |
 | `llamafactory/saves/` | 模型权重与训练/调度日志（LoRA adapter / merged；软链至 /disk16T1） |
 | `llamafactory/eval_outputs/` | 评测生成预测（`generated_predictions.jsonl` 等，按实验分目录） |
