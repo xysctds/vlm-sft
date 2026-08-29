@@ -1,11 +1,11 @@
 # LoRA 微调：Qwen3-VL-8B-Instruct 在 DeepFashion 属性 JSON 抽取任务上（主线任务）
 # 扁平 CLI 格式 —— 与 llamafactory/config/qwen3vl8b_dfattr_train.yaml（WebUI 分层格式）等价，
 # 参数以实际训练记录 llamafactory/saves/dfattr/lora/qwen3vl8b_dfattr_lora/training_args.yaml 为准，字段顺序略有不同。
-# 运行：
-#   单卡：  llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml
-#   3 卡 DDP（与主训练一致，等效 batch = 4×3×3 = 36）：
-#     NPROC_PER_NODE=3 CUDA_VISIBLE_DEVICES=0,1,2 llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml
-#   （单卡跑请把 gradient_accumulation_steps 改为 9，保持等效 batch 36；output_dir 按需修改）
+# 运行（单机多卡自动走 torchrun DDP，默认用全部可见 GPU）：
+#   3 卡 DDP（本机 3×4090，等效 batch = 4×3×3 = 36）：
+#     llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml
+#   单卡：用 CUDA_VISIBLE_DEVICES=0 限制单卡，并把 gradient_accumulation_steps 改为 9（保持等效 batch 36）；output_dir 按需修改
+#   如需跳过某张卡（如留给 vLLM/检索）：CUDA_VISIBLE_DEVICES=0,1 等限制可见卡即可（nproc 自动取可见卡数）
 
 stage: sft
 do_train: true

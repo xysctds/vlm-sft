@@ -1,7 +1,7 @@
 # 数据量消融中间点：schema 指令 + 20k 子集（与 schema-5k / simple-5k 同属数据量/指令消融）
 # 参数与 qwen3vl8b_dfattr_ablate_schema5k_train.yaml 同步；差异仅：max_samples 20000、warmup_steps 按同口径 5% 折算（80 vs 20）、output_dir —— 保证消融唯一变量 = 训练数据量
-# 运行（3 卡 DDP，与主训练一致，等效 batch = 4×3×3 = 36）：
-#   NPROC_PER_NODE=3 CUDA_VISIBLE_DEVICES=0,1,2 llamafactory-cli train llamafactory/config/ablation/qwen3vl8b_dfattr_ablate_schema20k_train.yaml
+# 运行（单机多卡自动 DDP，默认全部可见 GPU；本机 3 卡）：
+#   llamafactory-cli train llamafactory/config/ablation/qwen3vl8b_dfattr_ablate_schema20k_train.yaml
 # 或直接执行 llamafactory/config/ablation/run_ablate_20k.sh
 
 stage: sft

@@ -3,7 +3,6 @@
 cd "$(dirname "$0")/../../.."
 export PATH=/home/maotai/.conda/envs/lf/bin:$PATH
 export OMP_NUM_THREADS=16
-export NPROC_PER_NODE=3
 LOG=llamafactory/saves/ablation/train_simple35k.log
 echo "python: $(which python), nproc: $(nvidia-smi -L | wc -l)" >> $LOG
 
