@@ -64,6 +64,16 @@ def _sample_examples(n: int = 6) -> list[str]:
     picks = random.sample(files, min(n, len(files)))
     return [os.path.join(IMAGES_DIR, f) for f in picks]
 
+
+def _reshuffle_examples() -> dict:
+    """「换一批」按钮：重新随机抽 6 张示例图，更新 gr.Examples 的 dataset。
+
+    gr.Examples 本身不是 Component，不能直接作为 output；它内部持有 Dataset
+    组件（examples.dataset），通过 gr.update(samples=...) 更新即可让前端
+    换一批缩略图，点击加载逻辑保持不变。
+    """
+    return gr.update(samples=[[p] for p in _sample_examples()])
+
 # 「该款信息」要展示的字段（含三个相似度 + 属性）。attrs 顺序由 retrieval._ordered_attrs 统一规范化。
 INFO_KEYS = ["id", "image", "angle", "vis", "attr", "final", "attrs"]
 
@@ -279,8 +289,12 @@ def main() -> None:
         with gr.Row():
             with gr.Column(scale=1):  # 左：输入
                 img = gr.Image(type="filepath", label="上传服装全身照", height=320)
-                gr.Examples(examples=[[p] for p in _sample_examples()], inputs=[img],
-                            label="示例图（点击加载，启动时随机更换）", examples_per_page=6)
+                with gr.Row():
+                    gr.Markdown("**示例图**")
+                    btn_shuffle = gr.Button("换一批", size="sm", scale=0)
+                examples = gr.Examples(examples=[[p] for p in _sample_examples()],
+                                       inputs=[img], label="示例图", examples_per_page=6)
+                examples.dataset.show_label = False  # 隐藏自带 label，标题由上方 Markdown 承担
                 with gr.Row():
                     style = gr.Radio(["schema", "simple"], value="schema", label="Prompt 模板")
                     topk = gr.Slider(1, 10, value=5, step=1, label="相似款数量（Top-K）")
@@ -305,6 +319,7 @@ def main() -> None:
                 preview_info = gr.JSON(label="相似款详情（视觉 / 属性 / 综合相似度 & 属性）", max_height=None)
                 sim_records = gr.State([])  # 检索结果记录，供点击缩略图更新该款信息
         style.change(fn=on_style_change, inputs=style, outputs=prompt_box)
+        btn_shuffle.click(fn=_reshuffle_examples, outputs=[examples.dataset])
         btn_extract.click(
             fn=extract_attrs, inputs=[img, prompt_box], outputs=[parsed, perf],
             show_progress="full",
