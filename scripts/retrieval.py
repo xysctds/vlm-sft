@@ -24,7 +24,24 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from data_convert_deepfashion_multi import SHAPE_ATTRS  # noqa: E402
+
 DEFAULT_INDEX = "data/data_convert/deepfashion_multi/retrieval"
+
+# 属性字段标准顺序（与 schema Prompt 一致：shape 在前，再按上/下/外衣的 fabric/pattern）。
+ATTR_ORDER = [k for k, _ in SHAPE_ATTRS] + [f"{p}_{t}" for p in ("upper", "lower", "outer")
+                                            for t in ("fabric", "pattern")]
+
+
+def _ordered_attrs(attrs):
+    """按 ATTR_ORDER 重排属性 dict 的键顺序，未知键追加到末尾。"""
+    if not isinstance(attrs, dict):
+        return attrs
+    ordered = {k: attrs[k] for k in ATTR_ORDER if k in attrs}
+    for k in attrs:
+        if k not in ordered:
+            ordered[k] = attrs[k]
+    return ordered
 
 
 class RetrievalIndex:
@@ -88,7 +105,7 @@ class RetrievalIndex:
                 "vis_cos": float(vis[idx]),
                 "attr_score": float(self.attr_score(query_json or {})[idx]),
                 "final": float(scores[idx]),
-                "attrs": m["attrs"],
+                "attrs": _ordered_attrs(m["attrs"]),
             })
             if len(results) >= topk:
                 break
