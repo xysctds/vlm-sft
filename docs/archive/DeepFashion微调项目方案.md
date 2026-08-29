@@ -34,7 +34,7 @@
 | 数据 | DeepFashion-MultiModal（Text2Human, SIGGRAPH 2022）：44,096 图，官方人工标注 |
 | 数据构造 | **schema 感知指令**（枚举全部合法键与取值，工业界结构化输出标准做法）+ 朴素指令对照 |
 | 评测 | 自建：属性级准确率 / macro-F1 / 混淆矩阵 / 分层统计 / McNemar 显著性 / JSON 容错解析 |
-| 检索 | 属性约束 + 视觉 embedding 混合加权，全库 7972 件 top-k 相似款，Gradio 一键演示 |
+| 检索 | 属性约束 + 视觉 embedding 混合加权，检索库 7972 件 top-k 相似款，Gradio 一键演示 |
 | 部署 | LLaMA-Factory 导出合并 + vLLM OpenAI 兼容接口 + CLI/Web demo |
 | 硬件/周期 | 3×48GB 4090 服务器；14 天（每天 2~4 小时） |
 | 面向岗位 | 电商算法（商品属性/货架/知识图谱/相似款推荐）、多模态内容理解、大模型应用算法实习 |
@@ -314,7 +314,7 @@ python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jso
 
 ## 8. 相似款检索推荐
 
-把主线 demo 的终点（属性 JSON）变成起点：用抽出的 18 维属性 + 视觉特征，在 DeepFashion-MultiModal 全库（约 4.3 万图 / 7986 件商品）检索最相似的「相似款」，让 demo 升级成「电商标注 + 相似款推荐」完整场景。
+把主线 demo 的终点（属性 JSON）变成起点：用抽出的 18 维属性 + 视觉特征，在 DeepFashion-MultiModal 全库（约 4.4 万图 / 7975 件商品）检索最相似的「相似款」，让 demo 升级成「电商标注 + 相似款推荐」完整场景。
 
 相似款检索采用**属性约束 + 视觉向量**混合方式：用冻结的 Qwen3-VL 视觉塔（`model.visual`）抽库内图 embedding 走向量检索，叠加官方标注的属性约束做过滤/加权——复用现有 `model.visual` 与现有数据，零新增标注、不动训练。
 

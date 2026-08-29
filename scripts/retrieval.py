@@ -12,7 +12,7 @@
     python scripts/retrieval.py --mode vis            # 库内自检，应 top-1 命中自身
     python scripts/retrieval.py --mode hybrid --query <某张库内图> --json <属性json文件>
 
-依赖：numpy；向量检索用归一化点积，不引入 faiss（7986×1152 全量毫秒级）。
+依赖：numpy；向量检索用归一化点积，不引入 faiss（7972×1152 一次全量毫秒级）。
 """
 
 import argparse

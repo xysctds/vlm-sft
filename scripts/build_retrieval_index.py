@@ -12,7 +12,7 @@ embedding（mean-pool 视觉 patch 特征），叠加官方标注的属性约束
 口径
 ----
 - 商品 id：文件名 ``<大类>-<小类>-id_<商品id>-<子序号>_<视角号>_<角度>.jpg`` 中
-  ``id_`` 之后到 ``-`` 之前的部分（全库约 7986 个唯一 id）。
+  ``id_`` 之后到 ``-`` 之前的部分（全库 7975 个唯一 id；有 shape/caption 标注并入索引的 7972 个，3 个商品无标注被过滤）。
 - 代表图优先 ``1_front`` / ``2_side``，其次任意一张；shape 有标注的优先，保证属性约束可用。
 - 属性约束用官方 ``SHAPE_ATTRS / FABRIC_VALS / PATTERN_VALS``（与训练数据同源）。
 
@@ -20,7 +20,7 @@ embedding（mean-pool 视觉 patch 特征），叠加官方标注的属性约束
 
     conda activate peft
     python scripts/build_retrieval_index.py --limit 200   # 小样本冒烟
-    python scripts/build_retrieval_index.py               # 全量 7986 件
+    python scripts/build_retrieval_index.py               # 全量 7972 件
 
 产物默认写到 ``data/data_convert/deepfashion_multi/retrieval/``（git 忽略）。
 """
