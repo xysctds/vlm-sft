@@ -11,3 +11,4 @@ llamafactory/results/gradio.log
 llamafactory/config/ckpt_screen/ckpt_*.yaml
 llamafactory/llamaboard_cache/
 models/
+*.log

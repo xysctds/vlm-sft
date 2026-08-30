@@ -33,6 +33,11 @@ ATTR_ORDER = [k for k, _ in SHAPE_ATTRS] + [f"{p}_{t}" for p in ("upper", "lower
                                             for t in ("fabric", "pattern")]
 
 
+# 角度集合：建索引不全量过滤，检索时可选屏蔽 side/back（或按需限定角度）
+GOOD_ANGLES = {"front", "full", "flat", "additional"}
+SIDE_BACK = {"side", "back"}
+
+
 def _ordered_attrs(attrs):
     """按 ATTR_ORDER 重排属性 dict 的键顺序，未知键追加到末尾。"""
     if not isinstance(attrs, dict):
@@ -69,14 +74,22 @@ class RetrievalIndex:
     # ---- 检索 ------------------------------------------------------------
     def search(self, query_vec: np.ndarray, query_json: dict | None = None,
                mode: str = "hybrid", w_vis: float = 0.7, topk: int = 5,
-               min_attr: float = 0.0, exclude_same_id: str | None = None):
-        """返回 top-k 商品列表。
+               min_attr: float = 0.0, exclude_same_id: str | None = None,
+               allowed_angles: set[str] | None = None, group: bool = True):
+        """检索 top-k。
+
+        默认 ``group=True``：按 ``(id, 子序号)`` 聚合成"一套穿搭"为单位——组内任意
+        一个角度命中即可（组得分=组内最高分那个角度），返回每套的最佳匹配角度（缩略
+        ``best_*``）+ 该套全部角度（预览 ``angles``，按分数降序）。``group=False`` 退化为
+        每张图一条。
 
         query_vec   查询图向量（归一化后）
         query_json  模型抽出的属性 JSON（可为 None 则纯视觉）
         mode        vis / hybrid
         min_attr    属性硬过滤阈值（默认 0，即不过滤）
-        exclude_same_id  排除某个商品 id（用于同款排重时排除查询自身）
+        exclude_same_id  排除某个商品 id（用于排重/排除查询自身）
+        allowed_angles   限定允许的角度集合（如只留 front/full）；None=不过滤
+        group       是否按 "一套穿搭 (id,子序号)" 聚合；默认 True
         """
         vis = self.vecs @ (query_vec / (np.linalg.norm(query_vec) + 1e-9))
         if mode == "vis":
@@ -85,31 +98,72 @@ class RetrievalIndex:
             attr = self.attr_score(query_json or {})
             scores = w_vis * vis + (1 - w_vis) * attr
 
-        order = np.argsort(-scores)
-        results = []
-        seen_ids = set()
-        for idx in order:
+        attr_all = self.attr_score(query_json or {})
+
+        # 先过滤出候选索引
+        cands = []
+        for idx in np.argsort(-scores):
             m = self.meta[idx]
+            if allowed_angles is not None and m["angle"] not in allowed_angles:
+                continue
             if exclude_same_id and m["id"] == exclude_same_id:
                 continue
-            if min_attr > 0 and self.attr_score(query_json or {})[idx] < min_attr:
+            if min_attr > 0 and attr_all[idx] < min_attr:
                 continue
-            if m["id"] in seen_ids:  # 同款只留一个
-                continue
-            seen_ids.add(m["id"])
-            results.append({
-                "id": m["id"],
-                "image": m["image"],
-                "angle": m["angle"],
+            cands.append(idx)
+
+        if not group:
+            results = []
+            for idx in cands:
+                m = self.meta[idx]
+                results.append({
+                    "id": m["id"], "sub": m.get("sub"), "view": m.get("view"),
+                    "image": m["image"], "angle": m["angle"],
+                    "caption": m["caption"],
+                    "vis_cos": float(vis[idx]),
+                    "attr_score": float(attr_all[idx]),
+                    "final": float(scores[idx]),
+                    "attrs": _ordered_attrs(m["attrs"]),
+                })
+                if len(results) >= topk:
+                    break
+            return results
+
+        # 按 (id, 子序号) 聚合为一套穿搭
+        outfits: dict = {}
+        keyorder: list = []
+        for idx in cands:
+            m = self.meta[idx]
+            key = (m["id"], m.get("sub"))
+            if key not in outfits:
+                outfits[key] = {
+                    "id": m["id"], "sub": m.get("sub"),
+                    "best_image": "", "best_angle": "", "best_view": None,
+                    "best_final": -1.0, "best_vis_cos": 0.0, "best_attr": 0.0,
+                    "angles": [],
+                }
+                keyorder.append(key)
+            o = outfits[key]
+            sc = float(scores[idx])
+            o["angles"].append({
+                "image": m["image"], "angle": m["angle"], "view": m.get("view"),
                 "caption": m["caption"],
-                "vis_cos": float(vis[idx]),
-                "attr_score": float(self.attr_score(query_json or {})[idx]),
-                "final": float(scores[idx]),
+                "vis_cos": float(vis[idx]), "attr_score": float(attr_all[idx]),
+                "final": sc,
                 "attrs": _ordered_attrs(m["attrs"]),
             })
-            if len(results) >= topk:
-                break
-        return results
+            if sc > o["best_final"]:
+                o["best_final"] = sc
+                o["best_image"] = m["image"]
+                o["best_angle"] = m["angle"]
+                o["best_view"] = m.get("view")
+                o["best_vis_cos"] = float(vis[idx])
+                o["best_attr"] = float(attr_all[idx])
+
+        res = sorted((outfits[k] for k in keyorder), key=lambda x: -x["best_final"])
+        for o in res:
+            o["angles"].sort(key=lambda a: -a["final"])
+        return res[:topk]
 
     def selfcheck(self) -> bool:
         """库内自检：index[0] 检索应 top-1 命中自身。"""
@@ -197,10 +251,23 @@ def main() -> None:
     ap.add_argument("--mode", choices=["vis", "hybrid"], default="hybrid")
     ap.add_argument("--topk", type=int, default=5)
     ap.add_argument("--min-attr", type=float, default=0.0)
+    ap.add_argument("--exclude-side-back", action="store_true",
+                    help="检索时排除 side/back 角度（只留 front/full/flat/additional）")
+    ap.add_argument("--angles", default=None,
+                    help="逗号分隔的允许角度集合（如 front,full,additional）；缺省不过滤")
     ap.add_argument("--query", default=None, help="查询图（缺省则库内自检）")
     ap.add_argument("--json", default=None, help="查询属性 JSON 文件（可选）")
     ap.add_argument("--model", default="models/Qwen3-VL-8B-Instruct")
+    ap.add_argument("--show", choices=["best", "all"], default="best",
+                    help="每套展示模式：best=只看最佳角度缩略图；all=展开该套所有角度")
     args = ap.parse_args()
+
+    # 角度开关：exclude-side-back / angles 都可用，angle 参数优先级最高
+    allowed = None
+    if args.angles:
+        allowed = set(a.strip() for a in args.angles.split(",") if a.strip())
+    elif args.exclude_side_back:
+        allowed = GOOD_ANGLES
 
     idx = RetrievalIndex(args.index)
     if args.query is None:
@@ -212,15 +279,21 @@ def main() -> None:
     qj = json.load(open(args.json, encoding="utf-8")) if args.json else None
     print(f"查询图: {args.query}")
     print(f"属性 JSON: {qj}")
-    print(f"模式: {args.mode}  topk={args.topk}")
-    for i, r in enumerate(idx.search(qv, qj, mode=args.mode, topk=args.topk,
-                                    min_attr=args.min_attr)):
-        print(f"\n[{i+1}] id={r['id']}  {r['image']}  (vis={r['vis_cos']:.3f} "
-              f"attr={r['attr_score']:.2f} final={r['final']:.3f})")
-        if r["attrs"]:
-            print("    attr:", json.dumps(r["attrs"], ensure_ascii=False))
-        if r["caption"]:
-            print("    cap :", r["caption"])
+    print(f"模式: {args.mode}  topk={args.topk}  allowed_angles={allowed}  show={args.show}")
+    for i, o in enumerate(idx.search(qv, qj, mode=args.mode, topk=args.topk,
+                                     min_attr=args.min_attr, allowed_angles=allowed,
+                                     group=True)):
+        print(f"\n[{i+1}] 套 id={o['id']} sub={o['sub']}  最佳角度={o['best_angle']} ↔ {o['best_image']}"
+              f"  (vis={o['best_vis_cos']:.3f} attr={o['best_attr']:.2f} final={o['best_final']:.3f})")
+        if args.show == "all":
+            for a in o["angles"]:
+                print(f"      · {a['angle']:>10} {a['image']}  (vis={a['vis_cos']:.3f} final={a['final']:.3f})")
+        if args.show == "best" and o.get("angles"):
+            a0 = o["angles"][0]
+            if a0.get("attrs"):
+                print("    attr:", json.dumps(a0["attrs"], ensure_ascii=False))
+            if a0.get("caption"):
+                print("    cap :", a0["caption"])
 
 
 if __name__ == "__main__":

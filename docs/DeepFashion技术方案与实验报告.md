@@ -33,7 +33,7 @@
 | 数据 | DeepFashion-MultiModal（Text2Human, SIGGRAPH 2022）：44,096 图，官方人工标注 |
 | 数据构造 | **schema 感知指令**（枚举全部合法键与取值，工业界结构化输出标准做法）+ 朴素指令对照 |
 | 评测 | 自建：属性级准确率 / macro-F1 / 混淆矩阵 / 分层统计 / McNemar 显著性 / JSON 容错解析 |
-| 检索 | 属性约束 + 视觉 embedding 混合加权，检索库 7972 件 top-k 相似款，Gradio 一键演示 |
+| 检索 | 属性约束 + 视觉 embedding 混合加权，全库 44,096 图按 `(id,子序号)` 聚合成 12,908 套，top-k 相似套，Gradio 一键演示（套缩略→各角度→角度详情） |
 | 部署 | LLaMA-Factory 导出合并 + vLLM OpenAI 兼容接口 + CLI/Web demo |
 | 硬件/周期 | 3×48GB 4090 服务器；14 天（每天 2~4 小时） |
 | 面向岗位 | 电商算法（商品属性/货架/知识图谱/相似款推荐）、多模态内容理解、大模型应用算法实习 |
@@ -488,7 +488,7 @@ python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jso
 
 ## 9. 相似款检索推荐
 
-把主线 demo 的终点（属性 JSON）变成相似款检索的起点：用抽取的 18 维属性 + 视觉特征，在 DeepFashion-MultiModal 全库（约 4.4 万图 / 7975 件商品，入索引 7972 件）检索最相似的「相似款」，让 demo 升级成「电商标注 + 相似款推荐」完整场景。
+把主线 demo 的终点（属性 JSON）变成相似款检索的起点：用抽取的 18 维属性 + 视觉特征，在 DeepFashion-MultiModal 全库（约 4.4 万图 / 12,908 套穿搭）检索最相似的「整身穿搭」，让 demo 升级成「图 → 属性 → 相似穿搭检索」完整场景。
 
 相似款检索采用**属性约束 + 视觉向量**混合方式：用冻结的 Qwen3-VL 视觉塔（`model.visual`）抽库内图 embedding 走向量检索，叠加官方标注的属性约束做过滤/加权——复用现有 `model.visual` 与现有数据，零新增标注、不动训练。
 
@@ -496,24 +496,24 @@ python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jso
 用户上传图 ──▶ 属性抽取（主线）──▶ 属性 JSON
                                         │
                                         ▼
-        retrieval.py：属性约束过滤 + 视觉 cosine + 同款排重
+        retrieval.py：属性约束加权 + 视觉 cosine + 按套聚合
                                         │
                                         ▼
-                Gradio 相似款 Gallery（top-k，图上标匹配分）
+        Gradio 相似套 Gallery（top-k 套 ⇒ 套缩略 → 各角度 → 角度详情）
 ```
 
 **落地产物**：
 
 | 文件 | 内容 |
 |---|---|
-| `scripts/build_retrieval_index.py` | 解析官方标注 + captions → 按商品 id 聚合 → 视觉塔抽 embedding → 存索引；支持多卡分片并行 + 合并 |
-| `scripts/retrieval.py` | 加载索引；属性过滤/加权 + 向量余弦 → top-k 商品；只加载视觉塔 + 模型单例缓存 + 预热 |
-| `scripts/serve_gradio.py`（改造） | 属性抽取基础上加「相似款」Gallery |
-| `docs/检索推荐方案.md` | 检索/推荐闭环方案（检索管线、工程纪律、工作量） |
+| `scripts/build_retrieval_index.py` | 解析官方标注 + captions → 全量穿搭图索引（44,096 图每图一条，含 id/sub/view/angle/attrs/caption，不做角度过滤）→ 视觉塔抽 embedding → 存索引；支持多卡分片并行 + 合并 |
+| `scripts/retrieval.py` | 视觉余弦 + 官方属性命中率加权 → 按 `(id,子序号)` 聚合成套返回 top-k 套；支持检索侧角度过滤（--exclude-side-back/--angles）、展示 --show best|all；只加载视觉塔 + 模型单例缓存 + 预热 |
+| `scripts/serve_gradio.py`（改造） | 属性抽取基础上加「相似套」Gallery：套缩略图（每套最佳角度）→ 点套看各角度 → 点角度看该角度详情 |
+| `docs/检索推荐说明.md` | 检索/推荐闭环说明（检索管线、工程纪律、落地产物） |
 
-**工程纪律**：索引用 `lf` 环境构建（与训练/评测同 transformers 5.8），检索/Gradio 跑在 `vllm` 环境（embedding 口径一致，已验证 cosine=1.0）；只用视觉塔（576M）不加载 8B 语言模型；向量检索用 numpy 归一化点积（不引入 faiss）；检索约束一律用官方属性映射，与训练数据同源。
+**工程纪律**：检索相关工作（索引构建、检索、Gradio）**统一用 `vllm` 环境**（transformers 5.8），embedding 口径完全一致（已验证 cosine=1.0）；只用视觉塔（576M）不加载 8B 语言模型；向量检索用 numpy 归一化点积（不引入 faiss）；检索约束一律用官方属性映射，与训练数据同源。
 
-> 检索管线、索引构建参数、属性约束口径与工程纪律详见 `docs/检索推荐方案.md`。
+> 检索管线、索引构建参数、属性约束口径与工程纪律详见 `docs/检索推荐说明.md`。
 
 ---
 
@@ -549,7 +549,7 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 1. **任务达成**：LoRA 微调将服装属性抽取的属性级准确率从 59.8% 提升至 93.8%（+34.0pp），macro-F1 0.677，18 属性全部通过 McNemar 显著性检验，JSON 可解析率 100%——微调收益远超常见预期（细粒度任务上通用 VLM 的 0-shot 能力确实弱，领域微调空间巨大）；
 2. **方法论价值**：schema 感知指令是决定性因素（+31.5pp），数据效率高（5k 即达 92%），训练稳定无过拟合——这套"任务工程化 + 轻量微调 + 严谨评测"的组合可以直接迁移到其他结构化抽取场景（商品属性、证件信息、表格抽取等）；
 3. **工程闭环完整**：数据（防泄漏划分 + 质量关卡）→ 训练（LoRA + 口径一致）→ 评测（自建指标 + 统计检验 + 消融）→ 分析（badcase 归因）→ 部署（vLLM demo），可复现、可讲述；
-4. **相似款检索（闭环落地）**：在部署 demo 上落地**相似款检索推荐**（图 → 属性 → 相似款推荐），复用主线视觉塔抽 embedding + 官方属性约束加权，把抽取结果升级为完整的「电商标注 + 相似款推荐」场景（详见 §9 与 `docs/检索推荐方案.md`）。
+4. **相似款检索（闭环落地）**：在部署 demo 上落地**相似款检索推荐**（图 → 属性 → 相似款推荐），复用主线视觉塔抽 embedding + 官方属性约束加权，把抽取结果升级为完整的「电商标注 + 相似款推荐」场景（详见 §9 与 `docs/检索推荐说明.md`）。
 
 ### 11.2 局限
 
@@ -568,32 +568,123 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 
 ## 12. 附录
 
-### 12.1 配套实现与仓库结构
+附录按**用途**分三块：① 仓库结构与实现（`12.1`）；② 端到端复现手册（`12.2`，合并了原"命令速查"与"复现指引"重复内容）；③ 简历与面试准备（`12.3`）。正文各环节的命令已分别出现在 §6.3 / §9 / §10，本节只做**一次性的完整归纳**。
+
+### 12.1 仓库结构与实现
+
+按流水线环节组织，替换原先的平铺路径表：
+
+**① 数据**
 
 | 路径 | 内容 |
 |---|---|
 | `scripts/data_convert_deepfashion_multi.py` | 数据转换（schema 主线 + simple 对照 + caption + attr_qa，属性表内嵌） |
-| `scripts/check_data.py` | 数据质量四关卡 |
-| `scripts/eval_attr.py` | 评测打分：`stats`（属性级 acc / macro-F1 / 分层 / McNemar）；预测生成走 llamafactory 管线（见 6.3） |
-| `scripts/convert_preds.py` | 把 llamafactory predict 输出（generated_predictions.jsonl）转为 `eval_attr.py stats` 可消费的预测文件 |
-| `scripts/serve_demo.py` | vLLM demo 客户端（CLI） |
-| `scripts/serve_gradio.py` | Gradio Web demo（模板切换 + prompt 手动编辑；含相似款检索 Gallery） |
-| `scripts/build_retrieval_index.py` | 检索索引构建（官方标注聚合 + 视觉塔抽 embedding + 多卡分片） |
-| `scripts/retrieval.py` | 相似款检索（视觉+属性混合加权；只加载视觉塔 + 缓存 + 预热） |
-| `scripts/start_vllm.sh` | vLLM 一键启动脚本（封装 CUDA_HOME / flashinfer 禁用等环境准备，单卡/多卡切换） |
-| `scripts/start_web.sh` | Web demo 一键启动（vLLM + Gradio 全自动：GPU 分卡避让 / 健康检查） |
+| `scripts/check_data.py` | 数据质量四关卡（schema 健全 / 答案合法 / 防泄漏 / 分布统计） |
+| `data/data_convert/deepfashion_multi/` | 转换产物（jsonl + `dataset_info.json` + `images/`） |
+| `docs/数据说明.md` | 数据组织、原始格式、转换脚本、属性英中对照表 |
+
+**② 训练与配置**
+
+| 路径 | 内容 |
+|---|---|
 | `llamafactory/config/` | 训练/评测/导出配置（`ablation/`、`ckpt_screen/` 子目录） |
 | `llamafactory/saves/` | 模型权重与训练/调度日志（LoRA adapter / merged；软链至 /disk16T1） |
+
+**③ 评测**
+
+| 路径 | 内容 |
+|---|---|
+| `scripts/convert_preds.py` | 把 llamafactory predict 输出（`generated_predictions.jsonl`）转为 `eval_attr.py stats` 可消费的预测文件 |
+| `scripts/eval_attr.py` | 评测打分：`stats`（属性级 acc / macro-F1 / 分层 / McNemar）；预测生成走 llamafactory 管线（口径见 §5.3 / §6.3） |
 | `llamafactory/eval_outputs/` | 评测生成预测（`generated_predictions.jsonl` 等，按实验分目录） |
 | `llamafactory/results/` | 评测汇总与评测日志（`preds_*.jsonl`、报告、数据统计、`eval_*.log`） |
-| `data/data_convert/deepfashion_multi/` | 转换产物（jsonl + `dataset_info.json` + `images/`） |
+
+**④ 检索与部署**
+
+| 路径 | 内容 |
+|---|---|
+| `scripts/build_retrieval_index.py` | 检索索引构建（官方标注聚合 + 视觉塔抽 embedding + 多卡分片） |
+| `scripts/retrieval.py` | 相似款检索（视觉 + 属性混合加权；只加载视觉塔 + 缓存 + 预热） |
+| `scripts/serve_demo.py` | vLLM demo 客户端（CLI） |
+| `scripts/serve_gradio.py` | Gradio Web demo（模板切换 + prompt 手动编辑；含相似款检索 Gallery） |
+| `scripts/start_vllm.sh` | vLLM 一键启动脚本（封装 CUDA_HOME / flashinfer 禁用等环境准备，单卡/多卡切换） |
+| `scripts/start_web.sh` | Web demo 一键启动（vLLM + Gradio 全自动：GPU 分卡避让 / 健康检查） |
 | `docs/部署说明.md` | 部署文档：环境准备、单卡/多卡启动、API 示例、踩坑记录 |
-| `docs/检索推荐方案.md` | 检索/推荐闭环方案（检索管线、工程纪律、工作量） |
-| `docs/数据说明.md` | 数据组织、原始格式、转换脚本、属性对照表 |
+| `docs/检索推荐说明.md` | 检索/推荐闭环说明（检索管线、工程纪律、落地产物） |
 
 **工程纪律**：seed 固定（划分/训练/推理全链路）；每个实验一行 CSV + 元数据（模型、r、数据量、seed、指标）；requirements 精确版本；转换/评测脚本与报告发布 GitHub/HuggingFace（公开可复现）。
 
-### 12.2 简历表述与面试准备
+### 12.2 端到端复现手册
+
+从零到部署的一条流水线（脚本入口 + 主要产物），同环节的命令不再在 §6.3 / §10 之外重复铺开。每步可用 `bash -x` 看执行轨迹；`CUDA_VISIBLE_DEVICES` 可控制卡数。
+
+**① 环境**
+
+```bash
+conda activate lf
+pip install "llamafactory[torch]"            # 若未装
+export USE_MODELSCOPE_HUB=1
+```
+
+**② 数据**（解压产物放到 `data/data_convert/deepfashion_multi/` 后无参运行，幂等）
+
+```bash
+python scripts/data_convert_deepfashion_multi.py
+python scripts/check_data.py                  # 四关卡，退出码 0 才继续
+```
+
+**③ 训练**（单机多卡自动 DDP，默认全部可见 GPU；本机 3 卡，等效 batch = 4×3×3 = 36）
+
+```bash
+llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml
+# 单卡：CUDA_VISIBLE_DEVICES=0，并把 gradient_accumulation_steps 改为 9
+```
+
+**④ 消融**（指令范式 × 数据量，见 §5.4 / §7.2）
+
+```bash
+# 训练：llamafactory/config/ablation/*.yaml（schema/simple × 5k/20k/35k）
+# 打分：同 ⑤，产物在 llamafactory/results/report_ablation.md
+```
+
+**⑤ 评测**（正式口径：llamafactory 管线生成预测 + `eval_attr.py stats` 打分，原理与边界见 §5.3）
+
+```bash
+# 开发阶段：val 集，可反复跑（两份配置除 eval_dataset 外一致）
+llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_eval_val_base.yaml   # 基座 0-shot
+llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_eval_val_lora.yaml   # LoRA 微调后
+python scripts/convert_preds.py --preds llamafactory/eval_outputs/val_base/generated_predictions.jsonl \
+    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out llamafactory/results/preds_val_base.jsonl
+python scripts/convert_preds.py --preds llamafactory/eval_outputs/val_lora/generated_predictions.jsonl \
+    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out llamafactory/results/preds_val_lora.jsonl
+python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jsonl \
+    --lora llamafactory/results/preds_val_lora.jsonl --out llamafactory/results/report_val.md
+
+# 最终报告：test 集，全程只碰一次（把 val 两份配置复制为 test 版，eval_dataset 改 deepfashion_attr_json_test）
+# 其余环节产物：report_test.md / report_ckpt_screen.md / report_ckpt_confirm.md \
+#               / report_resolution.md / report_category.md / report_supplement.md
+```
+
+**⑥ 检索**（详见 §9 与 `docs/检索推荐说明.md`）
+
+```bash
+python scripts/build_retrieval_index.py       # 建检索索引（官方标注聚合 + 视觉塔抽 embedding）
+```
+
+**⑦ 部署**（完整命令与环境准备见 §10 与 `docs/部署说明.md`）
+
+```bash
+llamafactory-cli export llamafactory/config/qwen3vl8b_dfattr_export_cli.yaml
+conda activate vllm && export CUDA_HOME=/home/maotai/.conda/envs/vllm/lib/python3.11/site-packages/nvidia/cu13
+VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged \
+    --served-model-name deepfashion --port 8000 --max-model-len 32768
+python scripts/serve_demo.py --image <path/to/test.jpg>      # CLI
+python scripts/serve_gradio.py                                # Web → http://127.0.0.1:7860
+```
+
+> 各环节对应的**产物落点**均已在上文 `/命令` 注释标出；主报告产物集中在 `llamafactory/results/`（val / test / ablation / ckpt / resolution / category / supplement）。
+
+### 12.3 简历表述与面试准备
 
 **简历项目描述**：
 
@@ -615,57 +706,3 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 | LoRA rank 怎么定？ | 经验区间 16-64；当前用 16，计划补 r=8/32 消融（5k 数据，可选） |
 | schema 指令比一句话好在哪？ | 键名/取值不漂移、格式错误率下降（对照实验量化） |
 | 相似款检索怎么做？ | 属性约束 + 视觉 embedding 余弦混合加权，官方标注约束、只加载视觉塔（详见 §9） |
-
-### 12.3 关键命令速查
-
-```bash
-# ===== 环境 =====
-conda activate lf
-pip install "llamafactory[torch]"            # 若未装
-export USE_MODELSCOPE_HUB=1
-
-# ===== 数据（解压产物放到 data/data_convert/deepfashion_multi/ 后无参运行，幂等）=====
-python scripts/data_convert_deepfashion_multi.py
-python scripts/check_data.py                  # 四关卡，退出码 0 才继续
-
-# ===== 训练（单机多卡自动 DDP，默认全部可见 GPU；本机 3 卡）=====
-llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml
-
-# ===== 评测（正式口径：llamafactory 管线生成预测 + eval_attr.py stats 打分，详见 6.3）=====
-llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_eval_val_base.yaml   # 基座 0-shot（val）
-llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_eval_val_lora.yaml   # LoRA 微调后（val）
-python scripts/convert_preds.py --preds llamafactory/eval_outputs/val_base/generated_predictions.jsonl \
-    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out llamafactory/results/preds_val_base.jsonl
-python scripts/convert_preds.py --preds llamafactory/eval_outputs/val_lora/generated_predictions.jsonl \
-    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out llamafactory/results/preds_val_lora.jsonl
-python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jsonl \
-    --lora llamafactory/results/preds_val_lora.jsonl --out llamafactory/results/report_val.md
-
-# ===== 检索（见 §9 与 docs/检索推荐方案.md）=====
-python scripts/build_retrieval_index.py       # 建检索索引（官方标注聚合 + 视觉塔抽 embedding）
-
-# ===== 部署（完整命令与环境准备见 §10 与 docs/部署说明.md）=====
-llamafactory-cli export llamafactory/config/qwen3vl8b_dfattr_export_cli.yaml
-conda activate vllm && export CUDA_HOME=/home/maotai/.conda/envs/vllm/lib/python3.11/site-packages/nvidia/cu13
-VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged \
-    --served-model-name deepfashion --port 8000 --max-model-len 32768
-python scripts/serve_demo.py --image <path/to/test.jpg>
-```
-
-### 12.4 复现指引
-
-| 环节 | 入口 |
-|---|---|
-| 数据转换 | `python scripts/data_convert_deepfashion_multi.py` → `data/data_convert/deepfashion_multi/` |
-| 数据质量 | `python scripts/check_data.py`（四关卡） |
-| 训练 | `llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml`（单机多卡自动 DDP，本机 3 卡） |
-| 消融训练 | `llamafactory/config/ablation/*.yaml`（schema/simple × 5k/20k/35k 全量） |
-| 评测生成 | `llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_eval_val_{base,lora}.yaml` |
-| 评测打分 | `python scripts/convert_preds.py` + `python scripts/eval_attr.py stats` |
-| 主报告产物 | `llamafactory/results/report_val.md`（val）/ `report_test.md`（test） |
-| 消融报告产物 | `llamafactory/results/report_ablation.md`（指令范式 + 数据量） |
-| Checkpoint 报告 | `llamafactory/results/report_ckpt_screen.md`（快筛曲线）/ `report_ckpt_confirm.md`（top3 全量确认） |
-| 分辨率报告 | `llamafactory/results/report_resolution.md` |
-| 补充实验产物 | `llamafactory/results/report_category.md`（品类分层）/ `report_supplement.md`（指令鲁棒性 + few-shot） |
-| 部署 | `llamafactory-cli export`（merge）→ `vllm serve` → `python scripts/serve_demo.py`（CLI）／`python scripts/serve_gradio.py`（Web） |
-| 部署文档 | `docs/部署说明.md`（环境准备、单卡/多卡启动、API 示例、踩坑记录） |

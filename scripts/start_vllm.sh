@@ -13,7 +13,7 @@
 
 前台运行（Ctrl+C 停止）。后台运行可自行 nohup::
 
-    nohup bash scripts/start_vllm.sh > llamafactory/results/vllm_serve.log 2>&1 &
+    nohup bash scripts/start_vllm.sh > logs/vllm_serve.log 2>&1 &
 """
 
 set -euo pipefail

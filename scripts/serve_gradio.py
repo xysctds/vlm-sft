@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""DeepFashion 服装属性抽取 + 相似款检索 Gradio Web demo。
+"""DeepFashion 服装属性抽取 + 相似穿搭检索 Gradio Web demo。
 
 依赖 vLLM 服务已启动（完整命令见 docs/部署说明.md）::
 
@@ -13,8 +13,8 @@
     python scripts/serve_gradio.py          # 浏览器打开 http://127.0.0.1:7860
 
 本脚本只是 vLLM 的 HTTP 客户端，不依赖 llamafactory（vllm 环境已卸载之）；页面检索所用 embedding
-由本环境用与 lf 同版本的 transformers 抽取，口径一致。检索索引可用性、Embedding 预热状态会在顶部
-信息栏展示，方便现场演示时交代系统构成。
+由本环境（vllm）用 transformers 5.8 抽取，与索引构建同环境、同版本，口径严格一致。检索索引可用性、
+Embedding 预热状态会在顶部信息栏展示，方便现场演示时交代系统构成。
 """
 
 import base64
@@ -74,8 +74,8 @@ def _reshuffle_examples() -> dict:
     """
     return gr.update(samples=[[p] for p in _sample_examples()])
 
-# 「该款信息」要展示的字段（含三个相似度 + 属性）。attrs 顺序由 retrieval._ordered_attrs 统一规范化。
-INFO_KEYS = ["id", "image", "angle", "vis", "attr", "final", "attrs"]
+# 「角度详情」要展示的字段（含三个相似度 + 视角 + 属性）。attrs 顺序由 retrieval._ordered_attrs 统一规范化。
+INFO_KEYS = ["id", "sub", "image", "angle", "view", "vis", "attr", "final", "attrs"]
 
 _retrieval_idx = None
 
@@ -129,10 +129,11 @@ def predict(image_path: str, prompt: str) -> tuple[str, dict]:
 
 
 def _search_similar(image_path: str, attrs: dict, topk: int = 5):
-    """用查询图视觉特征 + 抽取的属性做混合检索，返回（相似款图列表, 相似款详情记录）。
+    """用查询图视觉特征 + 抽取的属性做混合检索，返回（相似套缩略图, 记录）。
 
-    Gallery 用 (图, caption) 元组，caption 为「#短id · 匹配分」，随图显示；记录用于下方该款信息。
-    """
+    检索按 `(id, 子序号)` 聚合成"一套穿搭"：Gallery 缩略图用每套的最佳角度图
+    （best_image），记录内包含该套全部角度 ``angles`` 供"预览所有角度"用；
+    caption 为「#短id · 角度 · 匹配分」。"""
     sim_imgs, records = [], []
     try:
         idx = _get_retrieval_index()
@@ -142,18 +143,21 @@ def _search_similar(image_path: str, attrs: dict, topk: int = 5):
     if idx is not None and isinstance(attrs, dict) and "error" not in attrs:
         try:
             qv = embed_query_image(image_path)
-            results = idx.search(qv, attrs, mode="hybrid", topk=topk)
-            for r in results:
-                p = os.path.join("data/data_convert/deepfashion_multi/images", r["image"])
-                # r['id'] 是纯 8 位数字（如 00000001），去掉前导零后更短：00000001 -> 1
-                raw = str(r["id"])
+            outfits = idx.search(qv, attrs, mode="hybrid", topk=topk, group=True)
+            for o in outfits:
+                p = os.path.join(IMAGES_DIR, o["best_image"])
+                raw = str(o["id"])
                 short = str(int(raw)) if raw.isdigit() else raw
-                caption = f"#{short}\n匹配 {r['final']:.2f}"
+                caption = f"#{short} · {o['best_angle']}\n匹配 {o['best_final']:.2f}"
                 sim_imgs.append((p, caption))
+                best = o["angles"][0] if o["angles"] else {}  # 组内已按分数降序
                 records.append({
-                    "id": short, "image": r["image"], "angle": r["angle"],
-                    "vis": round(r["vis_cos"], 3), "attr": round(r["attr_score"], 2),
-                    "final": round(r["final"], 3), "attrs": r["attrs"],
+                    "id": short, "sub": o.get("sub"),
+                    "image": o["best_image"], "angle": o["best_angle"],
+                    "vis": round(o["best_vis_cos"], 3), "attr": round(o["best_attr"], 2),
+                    "final": round(o["best_final"], 3),
+                    "attrs": best.get("attrs", {}),
+                    "angles": o["angles"],  # 该套所有角度（预览用）
                 })
         except Exception as exc:  # 检索失败不影响属性抽取结果
             records = [{"error": str(exc)}]
@@ -180,7 +184,7 @@ def _first_record(records):
 
 
 def extract_attrs(image_path: str, prompt: str) -> tuple[dict, dict]:
-    """只抽取属性，返回（属性 JSON, 耗时指标）。attrs 按标准顺序重排，与相似款一致。"""
+    """只抽取属性，返回（属性 JSON, 耗时指标）。attrs 按标准顺序重排，与穿搭检索一致。"""
     t0 = time.perf_counter()
     _, attrs = predict(image_path, prompt)
     elapsed = time.perf_counter() - t0
@@ -189,7 +193,7 @@ def extract_attrs(image_path: str, prompt: str) -> tuple[dict, dict]:
 
 
 def retrieve_similar(image_path: str, prompt: str, topk: int = 5):
-    """只检索相似款，返回（画廊, 记录, 该款信息, 耗时指标）。"""
+    """只检索相似穿搭，返回（画廊, 记录, 该款信息, 耗时指标）。"""
     t0 = time.perf_counter()
     _, attrs = predict(image_path, prompt)
     t1 = time.perf_counter()
@@ -204,7 +208,7 @@ def retrieve_similar(image_path: str, prompt: str, topk: int = 5):
 
 
 def predict_with_retrieval(image_path: str, prompt: str, topk: int = 5):
-    """一键：先抽取属性，再检索相似款，返回（属性JSON, 画廊, 记录, 该款信息, 耗时指标）。"""
+    """一键：先抽取属性，再检索相似穿搭，返回（属性JSON, 画廊, 记录, 该款信息, 耗时指标）。"""
     t0 = time.perf_counter()
     _, attrs = predict(image_path, prompt)
     t1 = time.perf_counter()
@@ -219,17 +223,38 @@ def predict_with_retrieval(image_path: str, prompt: str, topk: int = 5):
 
 
 def on_gallery_select(evt: gr.SelectData, records: list):
-    """点击某张相似款缩略图（含预览选中时），更新下方「该款信息」。"""
+    """点某套缩略图：预览该套所有角度（每张标注角度 + 各分），记录该套各角度供点详情。"""
     if not records:
+        return gr.update(value=[]), [], {}
+    i = evt.index if evt is not None else 0
+    rec = records[i] if isinstance(records, list) and 0 <= i < len(records) else records[0]
+    if not isinstance(rec, dict) or "error" in rec:
+        return gr.update(value=[]), [], {}
+    angles = rec.get("angles", []) or []
+    # 每个角度并入 id/sub，便于详情展示
+    angle_recs = [dict(a, id=rec.get("id"), sub=rec.get("sub")) for a in angles]
+    angle_imgs = [(os.path.join(IMAGES_DIR, a["image"]),
+                   f"{a['angle']} · vis {a['vis_cos']:.2f} / attr {a['attr_score']:.2f} / final {a['final']:.2f}")
+                  for a in angles]
+    info = _info_of({"id": rec.get("id"), "sub": rec.get("sub"),
+                     "image": rec.get("image"), "angle": rec.get("angle"), "view": None,
+                     "vis": rec.get("vis"), "attr": rec.get("attr"),
+                     "final": rec.get("final"), "attrs": rec.get("attrs")})
+    return gr.update(value=angle_imgs), angle_recs, info
+
+
+def on_angle_select(evt: gr.SelectData, angle_records: list):
+    """点某个角度缩略图：显示该角度自己的详细信息（视角 / 各分 / 属性）。"""
+    if not angle_records:
         return {}
     i = evt.index if evt is not None else 0
-    if isinstance(records, list) and 0 <= i < len(records):
-        rec = records[i]
-    else:
-        rec = records[0]
-    if not isinstance(rec, dict) or "error" in rec:
-        rec = {}
-    return _info_of(rec)
+    a = angle_records[i] if isinstance(angle_records, list) and 0 <= i < len(angle_records) else angle_records[0]
+    if not isinstance(a, dict):
+        return {}
+    return _info_of({"id": a.get("id"), "sub": a.get("sub"),
+                     "image": a.get("image"), "angle": a.get("angle"), "view": a.get("view"),
+                     "vis": round(a.get("vis_cos", 0), 3), "attr": round(a.get("attr_score", 0), 2),
+                     "final": round(a.get("final", 0), 3), "attrs": a.get("attrs", {})})
 
 
 def on_style_change(style: str) -> str:
@@ -282,9 +307,8 @@ CSS = """
 
 def main() -> None:
     _preload_query_model()  # 启动即后台预热查询模型
-    with gr.Blocks(title="DeepFashion 服装属性抽取 + 相似款检索 Demo",
-                   theme=THEME, css=CSS) as demo:
-        gr.Markdown("# DeepFashion · 服装属性抽取与相似款检索", elem_id="app-title")
+    with gr.Blocks(title="DeepFashion 服装属性抽取 + 相似穿搭检索 Demo") as demo:
+        gr.Markdown("# DeepFashion · 服装属性抽取与相似穿搭检索", elem_id="app-title")
         gr.Markdown(_build_info(), elem_id="info-bar")
         with gr.Row():
             with gr.Column(scale=1):  # 左：输入
@@ -297,14 +321,14 @@ def main() -> None:
                 examples.dataset.show_label = False  # 隐藏自带 label，标题由上方 Markdown 承担
                 with gr.Row():
                     style = gr.Radio(["schema", "simple"], value="schema", label="Prompt 模板")
-                    topk = gr.Slider(1, 10, value=5, step=1, label="相似款数量（Top-K）")
+                    topk = gr.Slider(1, 10, value=5, step=1, label="相似穿搭数量（Top-K）")
                 prompt_box = gr.Textbox(
                     value=build_schema_prompt(),
                     label="提示词（可编辑）", lines=20, max_lines=20,
                 )
                 with gr.Row():
                     btn_extract = gr.Button("抽取属性", variant="secondary")
-                    btn_retrieve = gr.Button("检索相似款", variant="secondary")
+                    btn_retrieve = gr.Button("检索相似穿搭", variant="secondary")
                 btn_both = gr.Button("一键：抽取 + 检索", variant="primary")
                 perf = gr.JSON(label="性能指标（推理与检索耗时）")
             with gr.Column(scale=1):  # 右：输出
@@ -312,12 +336,19 @@ def main() -> None:
                 # gradio 原生 Gallery 预览：点图会在图框内部放大（大图 + 待选缩略图条一起显示全），
                 # caption「#短id · 匹配分」随图显示。allow_preview=True 保持原生行为。
                 sim_gallery = gr.Gallery(
-                    label="相似款（视觉 + 属性混合检索）", columns=5, height=300,
+                    label="相似套（每套 = 一整套穿搭；缩略图为该套最佳角度）", columns=5, height=300,
                     object_fit="contain", fit_columns=False, allow_preview=True,
                     elem_classes="sim-gallery",
                 )
-                preview_info = gr.JSON(label="相似款详情（视觉 / 属性 / 综合相似度 & 属性）", max_height=None)
-                sim_records = gr.State([])  # 检索结果记录，供点击缩略图更新该款信息
+                # 点某套缩略图 -> 在下方预览该套的每个角度图（front/side/additional...，各带每个相似度）
+                angle_preview = gr.Gallery(
+                    label="选中的套 · 每个角度（点某个角度查看它的详细属性）", columns=5, height=220,
+                    object_fit="contain", fit_columns=False, allow_preview=True,
+                    elem_classes="sim-gallery",
+                )
+                preview_info = gr.JSON(label="角度详情（视角 / 视觉 / 属性 / 综合相似度 & 属性）", max_height=None)
+                sim_records = gr.State([])  # 检索结果记录（每套），供点击缩略图更新
+                angle_records = gr.State([])  # 当前套的各角度记录，供点击某个角度更新详情
         style.change(fn=on_style_change, inputs=style, outputs=prompt_box)
         btn_shuffle.click(fn=_reshuffle_examples, outputs=[examples.dataset])
         btn_extract.click(
@@ -335,11 +366,15 @@ def main() -> None:
             show_progress="full",
         )
         sim_gallery.select(
-            fn=on_gallery_select, inputs=[sim_records], outputs=[preview_info],
+            fn=on_gallery_select, inputs=[sim_records],
+            outputs=[angle_preview, angle_records, preview_info],
+        )
+        angle_preview.select(
+            fn=on_angle_select, inputs=[angle_records], outputs=[preview_info],
         )
     demo.queue(default_concurrency_limit=1)  # 串行排队，避免撞 GPU
     demo.launch(server_name="127.0.0.1", server_port=7860, allowed_paths=[IMAGES_DIR],
-                show_error=True)
+                show_error=True, theme=THEME, css=CSS)
 
 
 if __name__ == "__main__":

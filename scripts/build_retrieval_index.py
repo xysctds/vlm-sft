@@ -4,23 +4,23 @@
 
 用途
 ----
-用冻结的 Qwen3-VL 视觉塔（``model.visual``）对库内每个商品 id 的一张代表图抽
+用冻结的 Qwen3-VL 视觉塔（``model.visual``）对库内每条"可展示的穿搭图"抽
 embedding（mean-pool 视觉 patch 特征），叠加官方标注的属性约束，产出检索库：
-    1. ``index_meta.json``   商品 id -> {代表图, 属性字典, caption, 角度, 子序号}
+    1. ``index_meta.json``   每条穿搭图的元数据（list）：{id, sub, view, angle, image, attrs, caption}
     2. ``index_vectors.npy`` 与 meta 同序的归一化视觉向量（[N, 1152] bf16）
 
 口径
 ----
-- 商品 id：文件名 ``<大类>-<小类>-id_<商品id>-<子序号>_<视角号>_<角度>.jpg`` 中
-  ``id_`` 之后到 ``-`` 之前的部分（全库 7975 个唯一 id；有 shape/caption 标注并入索引的 7972 个，3 个商品无标注被过滤）。
-- 代表图优先 ``1_front`` / ``2_side``，其次任意一张；shape 有标注的优先，保证属性约束可用。
+- 索引粒度：**全量图都进索引**（每条 = 一张穿搭图，含 ``id``/``sub``/``view``/``angle``/``image``/``attrs``/``caption``）。
+  建索引不做角度预过滤；是否屏蔽某类角度（如 ``side``/``back`` 或只留 ``front``）由**检索侧开关**决定，
+  以后换策略无需重抽索引。
 - 属性约束用官方 ``SHAPE_ATTRS / FABRIC_VALS / PATTERN_VALS``（与训练数据同源）。
 
-运行（``peft`` 环境，模型在 ``models/Qwen3-VL-8B-Instruct``）::
+运行（``vllm`` 环境，模型在 ``models/Qwen3-VL-8B-Instruct``）::
 
-    conda activate peft
+    conda activate vllm
     python scripts/build_retrieval_index.py --limit 200   # 小样本冒烟
-    python scripts/build_retrieval_index.py               # 全量 7972 件
+    python scripts/build_retrieval_index.py               # 全量（约 4.4 万条穿搭图）
 
 产物默认写到 ``data/data_convert/deepfashion_multi/retrieval/``（git 忽略）。
 """
@@ -46,9 +46,6 @@ from data_convert_deepfashion_multi import (  # noqa: E402
 MODEL_PATH = "models/Qwen3-VL-8B-Instruct"
 IMG_DIR = "data/data_convert/deepfashion_multi/images"
 
-# 代表图角度优先级（front 最佳，side 次之，back/additional/full 兜底）
-_ANGLE_PRIORITY = {"1_front": 0, "2_side": 1, "4_full": 2, "3_back": 3, "7_additional": 4}
-
 # 文件名 -> (商品 id, 子序号, 视角号, 角度)
 _FN_RE = re.compile(r"^.*-id_(\d+)-(\d+)_(\d+)_([a-z_]+)\.jpg$")
 
@@ -62,59 +59,33 @@ def parse_filename(fn: str) -> tuple[str, str, str, str] | None:
     return pid, sub, view, angle
 
 
-def pick_representative(items: list[dict]) -> dict:
-    """从同一商品的多张图中选代表图：角度优先，shape 有标注的优先。"""
-    def key(it):
-        angle = it["angle"]
-        prio = _ANGLE_PRIORITY.get(angle, 99)
-        # (是否少 shape 优先=0, 角度优先级, 子序号) —— 有 shape 标注的排前面
-        return (0 if it["has_shape"] else 1, prio, int(it["sub"]))
+def build_item_index(data_dir: str, img_dir: str = IMG_DIR) -> list[dict]:
+    """全量聚合官方标注 -> 每条穿搭图一条 metadata（list）。
 
-    return min(items, key=key)
-
-
-def build_item_index(data_dir: str) -> dict[str, dict]:
-    """聚合官方标注 -> {商品id: {代表图, 属性, caption, angle}}。"""
+    粒度：全库每张图一个条目，不做角度过滤。每个条目：
+    {id, sub, view, angle, image, attrs, caption}。attr 缺失（无官方标注）时为空 dict。
+    """
     captions = json.load(open(os.path.join(data_dir, "captions.json"), encoding="utf-8"))
     shape = read_txt_ann(os.path.join(data_dir, "labels", "shape", "shape_anno_all.txt"))
     fabric = read_txt_ann(os.path.join(data_dir, "labels", "texture", "fabric_ann.txt"))
     pattern = read_txt_ann(os.path.join(data_dir, "labels", "texture", "pattern_ann.txt"))
     attrs = build_attrs(shape, fabric, pattern)  # {img: {attr: value}}
 
-    # 图片集合：优先 shape 有标注的，否则 captions 有描述的
-    image_pool = sorted(set(shape) | set(captions))
-    groups: dict[str, list[dict]] = {}
-    for fn in image_pool:
+    items: list[dict] = []
+    for fn in sorted(os.listdir(img_dir)):
         parsed = parse_filename(fn)
         if parsed is None:
             continue
         pid, sub, view, angle = parsed
-        groups.setdefault(pid, []).append({
-            "img": fn,
+        items.append({
+            "id": pid,
             "sub": sub,
             "view": view,
             "angle": angle,
-            "has_shape": fn in shape,
+            "image": fn,
             "attrs": attrs.get(fn, {}),
             "caption": str(captions.get(fn, "")),
         })
-
-    items: dict[str, dict] = {}
-    for pid, group in groups.items():
-        rep = pick_representative(group)
-        # 若代表图缺 shape，尽量补充同 id 里有 shape 的视角属性（代表图优先，其次聚合）
-        merged = dict(rep["attrs"])
-        for g in group:  # 补全：同 id 其它视角可见的属性并入（真值检索约束）
-            for k, v in g["attrs"].items():
-                merged.setdefault(k, v)
-        items[pid] = {
-            "id": pid,
-            "image": rep["img"],
-            "angle": rep["angle"],
-            "caption": rep["caption"],
-            "attrs": merged,
-            "n_views": len(group),
-        }
     return items
 
 
@@ -156,29 +127,28 @@ def embed_image(processor, model, path: str, device: str) -> np.ndarray:
     return vec.detach().cpu().to(torch.float32).numpy()
 
 
-def build_shard(out_dir: str, items: dict, pids: list[str], processor, model, device,
+def build_shard(out_dir: str, items: list[dict], processor, model, device,
                 shard: int = -1, nshards: int = 1) -> None:
     """抽取 embedding 并落盘。shard>=0 时分片写独立文件；shard<0 写最终文件。"""
-    print(f"[3/4] 抽取 embedding（分片 {shard + 1}/{nshards}，共 {len(pids)} 件）...")
+    print(f"[3/4] 抽取 embedding（分片 {shard + 1}/{nshards}，共 {len(items)} 条）...")
     order, vecs = [], []
-    for i, pid in enumerate(pids):
-        it = items[pid]
+    for i, it in enumerate(items):
         path = os.path.join(IMG_DIR, it["image"])
         if not os.path.exists(path):
             print(f"     跳过缺失图 {it['image']}")
             continue
         vec = embed_image(processor, model, path, device)
         vec /= np.linalg.norm(vec) + 1e-9  # 归一化，检索直接用点积
-        order.append(pid)
+        order.append(it)
         vecs.append(vec)
         if (i + 1) % 200 == 0:
-            print(f"     {i + 1}/{len(pids)} done")
+            print(f"     {i + 1}/{len(items)} done")
 
     if not vecs:
         print("ERROR: 没有抽到任何向量", file=sys.stderr)
         sys.exit(1)
 
-    meta = [items[pid] for pid in order]
+    meta = order
     arr = np.stack(vecs).astype(np.float32)
     if shard >= 0:
         vec_path = os.path.join(out_dir, f"index_vectors.shard{shard}.npy")
@@ -245,26 +215,25 @@ def main() -> None:
         merge_shards(out_dir)
         return
 
-    print("[1/4] 聚合官方标注 -> 商品索引 ...")
-    items = build_item_index(args.data)
-    pids = sorted(items)
+    print("[1/4] 聚合官方标注 -> 穿搭图候选索引 ...")
+    items = build_item_index(args.data, os.path.join(args.data, "images"))
     if args.limit:
         rng = random.Random(args.seed)
-        rng.shuffle(pids)
-        pids = pids[: args.limit]
-    print(f"     商品总数 {len(items)}，本次处理 {len(pids)}")
+        rng.shuffle(items)
+        items = items[: args.limit]
+    print(f"     候选条目总数 {len(items)}，本次处理 {len(items)}")
 
-    # 分片切分：按 id 排序后均匀切成 nshards 段，每卡处理一段
+    # 分片切分：均匀切成 nshards 段，每卡处理一段
     if args.nshards > 1 and args.shard >= 0:
-        chunk = (len(pids) + args.nshards - 1) // args.nshards
-        pids = pids[args.shard * chunk:(args.shard + 1) * chunk]
-        print(f"     [shard {args.shard}/{args.nshards}] 处理 {len(pids)} 件")
+        chunk = (len(items) + args.nshards - 1) // args.nshards
+        items = items[args.shard * chunk:(args.shard + 1) * chunk]
+        print(f"     [shard {args.shard}/{args.nshards}] 处理 {len(items)} 条")
         assert args.shard < args.nshards, "--shard 必须 < --nshards"
 
     print("[2/4] 加载视觉塔 + processor ...")
     processor, model, device = load_model()
 
-    build_shard(out_dir, items, pids, processor, model, device,
+    build_shard(out_dir, items, processor, model, device,
                 shard=args.shard, nshards=args.nshards)
 
 

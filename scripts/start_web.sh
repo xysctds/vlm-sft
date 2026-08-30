@@ -18,7 +18,7 @@
 #   vLLM 用显式指定的卡（默认双卡 TP=2 用 GPU0+1；single 用 GPU0），Gradio 查询模型
 #   自动挑一块未被 vLLM 占用的空闲卡（避免同卡 OOM，见 docs/部署说明.md §6.6）。
 # - Gradio 跑在 **vllm** 环境（gradio 6.26 + starlette 1.6 兼容），无需 llamafactory。
-# - 日志分别写 llamafactory/results/vllm_serve.log 与 gradio.log。
+# - 日志分别写 logs/vllm_serve.log 与 logs/gradio.log。
 
 set -euo pipefail
 
@@ -28,8 +28,8 @@ ROOT="$(pwd)"
 
 VLLM_PORT=8000
 GRADIO_PORT=7860
-VLLM_LOG="$ROOT/llamafactory/results/vllm_serve.log"
-GRADIO_LOG="$ROOT/llamafactory/results/gradio.log"
+VLLM_LOG="$ROOT/logs/vllm_serve.log"
+GRADIO_LOG="$ROOT/logs/gradio.log"
 
 # ---- 工具函数 ----
 running() { ss -tlnp 2>/dev/null | grep -q ":$1 "; }
