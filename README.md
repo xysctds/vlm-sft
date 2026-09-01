@@ -26,7 +26,8 @@
 
 ```
 vlm/
-├── data/ -> /disk16T1/scratch/maotai/data/vlm_data   # 数据集（软链）
+├── data/                   # 数据集
+├── models/                 # 模型（基座 Qwen3-VL-8B/32B、Qwen2.5-1.5B + merged/）
 ├── docs/                   # 主文档（方案+实验报告）+ 检索方案 + 运维手册 + 示例样本
 ├── experiments/            # 实验工作台：按实验组织（配置/脚本/预测/报告/权重自成一目录）
 ├── requirements_lf_full.txt # lf 环境依赖（pip freeze 全量精确版，可直接复现）
@@ -39,7 +40,7 @@ vlm/
 ## 各文件夹说明
 
 ### data/
-数据集目录，**软链**到 `/disk16T1/scratch/maotai/data/vlm_data`，**已被 git 忽略**。内部按「原始数据 / 转换后数据」组织，详细说明见 docs/ 下的《数据说明》文档。
+数据集目录（**软链**，目标见下方「软链清单」），**已被 git 忽略**。内部按「原始数据 / 转换后数据」组织，详细说明见 docs/ 下的《数据说明》文档。
 
 ### docs/
 项目文档（主文档 + 实现说明 + 运维手册）：
@@ -58,7 +59,7 @@ vlm/
   - `config/`：训练/导出/评测配置；`predictions/`：评测生成预测 + `logs/`（推理/评测日志）；`reports/`：preds + 各报告（report_val/test/category/resolution/supplement）。
   - `scripts/`：few-shot 数据生成（data_convert_fewshot_val）+ 品类/分辨率/补充实验报告生成（summarize_category / summarize_resolution / summarize_supplement）。
   - `weights/lora/`：LoRA 适配器与全部 checkpoint（**实体**，15G，git 忽略）。
-  - `weights/merged/`：合并后完整模型（**软链**到 `/disk16T1/.../model/saves/dfattr/merged`，17G 不进仓库）。
+  - `weights/merged/`：合并后完整模型（**软链**，目标见下方「软链清单」；17G 不进仓库）。
   - `weights/logs/`：训练日志（各实验统一约定：训练日志进 `weights/logs/`，推理/评测日志进 `predictions/logs/`）。
 - `ablation/`：**指令范式消融**（schema/simple × 5k/20k/35k）——config + scripts（run_ablate_* 训练调度 / summarize_ablation）+ predictions + reports（report_ablation）+ weights（实体 5.4G）。
 - `ckpt_screen/`：**checkpoint 快筛/确认**——config（ckpt_*.yaml 由 scripts/generate_ckpt_yamls.py 自动生成）+ scripts（generate_ckpt_yamls / run_screen / summarize_ckpts / summarize_confirm）+ predictions + reports（report_ckpt_screen/confirm）+ weights（实体）。
@@ -66,18 +67,6 @@ vlm/
 - `llamaboard_cache/`：WebUI 缓存（git 忽略）。
 
 > 说明：`experiments/*/weights/`、`predictions/` 及预测/日志类产物均 git 忽略；配置与报告 md 入库。
-
-### 软链清单（外部资产）
-
-| 仓库内路径 | 目标（/disk16T1） | 说明 |
-|---|---|---|
-| `data/` | `scratch/maotai/data/vlm_data` | 数据集（原始+转换+检索索引） |
-| `models/Qwen3-VL-8B-Instruct` | `scratch/maotai/model/Qwen3-VL-8B-Instruct` | 基座模型 |
-| `experiments/main/weights/merged/` | `scratch/maotai/model/saves/dfattr/merged` | 合并后完整模型（17G） |
-
-**换机/迁移**：保留相对路径约定，只重建以上 3 条软链即可；`/disk16T1` 上的旧权重目录
-（`model/saves/lora、ablation、ckpt_screen、dfattr_lora_verify_30g*`）为迁移前的双份备份，
-确认稳定后可手动删除。
 
 ### scripts/
 **通用脚本**（跨实验共用：数据转换 / 评测打分 / 部署 / 检索）；实验专属脚本已随实验归入各自
@@ -96,6 +85,16 @@ vlm/
 
 ### 根目录文件
 - `requirements_lf_full.txt`：lf 环境全量依赖（pip freeze 精确版本，`pip install -r` 可直接复现环境）。
+
+### 软链清单（外部资产）
+
+| 仓库内路径 | 目标（/disk16T1） | 说明 |
+|---|---|---|
+| `data/` | `scratch/maotai/data/vlm_data` | 数据集（原始+转换+检索索引） |
+| `models/` | `scratch/maotai/models` | 模型（基座 `Qwen3-VL-8B-Instruct` / `Qwen3-VL-32B-Instruct` / `Qwen2.5-1.5B-Instruct` + `merged/`） |
+| `experiments/main/weights/merged/` | `scratch/maotai/models/merged` | 合并后完整模型（17G） |
+
+**换机/迁移**：保留相对路径约定，只重建以上 3 条软链即可（`data/`、`models/`、`experiments/main/weights/merged/`）。
 
 ---
 

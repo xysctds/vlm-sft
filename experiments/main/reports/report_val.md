@@ -1,8 +1,8 @@
 # DeepFashion 属性 JSON 评测报告
 
 - 生成时间：2026-08-25 17:00:26
-- Base 预测文件：`llamafactory/results/preds_val_base.jsonl`
-- LoRA 预测文件：`llamafactory/results/preds_val_lora.jsonl`
+- Base 预测文件：`experiments/main/reports/preds_val_base.jsonl`
+- LoRA 预测文件：`experiments/main/reports/preds_val_lora.jsonl`
 
 ## 1. 总览
 

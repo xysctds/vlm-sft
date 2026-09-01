@@ -4,7 +4,7 @@ backup
 
 # 外部资产（软链）
 data
-models/
+models
 
 # 工具目录
 __pycache__/
