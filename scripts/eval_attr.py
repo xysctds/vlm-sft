@@ -9,15 +9,15 @@
 mm_plugin 图像 token 显式展开、同数据格式），再用 ``scripts/convert_preds.py``
 把 llamafactory 输出转成本脚本可消费的预测文件::
 
-    llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_eval_val_base.yaml
-    llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_eval_val_lora.yaml
+    llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_eval_val_base.yaml
+    llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_eval_val_lora.yaml
     python scripts/convert_preds.py --preds <output_dir>/generated_predictions.jsonl \\
         --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl \\
-        --out llamafactory/results/preds_val_lora.jsonl
+        --out experiments/main/reports/preds_val_lora.jsonl
     python scripts/eval_attr.py stats \\
-        --base llamafactory/results/preds_val_base.jsonl \\
-        --lora llamafactory/results/preds_val_lora.jsonl \\
-        --out llamafactory/results/report_val.md
+        --base experiments/main/reports/preds_val_base.jsonl \\
+        --lora experiments/main/reports/preds_val_lora.jsonl \\
+        --out experiments/main/reports/report_val.md
 
 （历史说明：旧版含 ``infer`` 推理子命令，因 transformers 原生渲染（1 个
 image_pad 占位符）与训练/llamafactory 的显式图像 token 展开（6~7 个 image_pad）
@@ -364,7 +364,7 @@ def main() -> None:
     p_stats = sub.add_parser("stats")
     p_stats.add_argument("--base", required=True)          # Base 预测文件（JSONL）
     p_stats.add_argument("--lora", default=None)           # LoRA 预测文件（可选）
-    p_stats.add_argument("--out", default="llamafactory/results/report.md")  # 报告输出路径
+    p_stats.add_argument("--out", default="experiments/main/reports/report.md")  # 报告输出路径
     p_stats.set_defaults(func=run_stats)
 
     args = parser.parse_args()

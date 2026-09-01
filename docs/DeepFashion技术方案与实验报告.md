@@ -28,8 +28,8 @@
 | 项 | 内容 |
 |---|---|
 | 任务 | 服装全身图 → 结构化属性 JSON（袖长/领型/面料/图案等 18 维属性）+ 全库相似款检索推荐 |
-| 模型 | Qwen3-VL-8B-Instruct（约 8.5B，单卡 48G） |
-| 框架 | LLaMA-Factory（CLI），LoRA 微调（可训练参数 <1%；秩/α 等超参以训练配置为准） |
+| 模型 | Qwen3-VL-8B-Instruct（≈ 8.81B 参数，全 bf16，单卡 48G） |
+| 框架 | LLaMA-Factory（CLI），LoRA 微调（`r=16/α=32/dropout=0.05/target=all`，可训练 ≈ 43.6M，约 0.5%） |
 | 数据 | DeepFashion-MultiModal（Text2Human, SIGGRAPH 2022）：44,096 图，官方人工标注 |
 | 数据构造 | **schema 感知指令**（枚举全部合法键与取值，工业界结构化输出标准做法）+ 朴素指令对照 |
 | 评测 | 自建：属性级准确率 / macro-F1 / 混淆矩阵 / 分层统计 / McNemar 显著性 / JSON 容错解析 |
@@ -105,14 +105,14 @@
 
 | 维度 | ChartQA（备选） | DeepFashion-MultiModal（选定） |
 |---|---|---|
-| 区分度 | 微调模板烂大街 | 用的人极少，组合几乎空白 |
-| 业务匹配 | BI/报表问答，岗位少 | 电商/内容平台岗位多，价值秒懂 |
-| 微调收益 | base 模型已不差，空间有限 | 细粒度属性 base 做不好，容易出大提升 |
+| 区分度 | 模板化微调，方案同质化 | 用的人极少，组合几乎空白 |
+| 业务匹配 | BI/报表问答，岗位少 | 电商/内容平台岗位多，价值直观 |
+| 微调收益 | base 模型已不差，提升空间有限 | 细粒度属性 base 做不好，容易出大提升 |
 | 评测基准 | 官方 ground truth | 无官方指标 → 自建体系（展示方法论） |
 | 数据形态 | 合成图表 | 真实人像/衣物图，demo 冲击力强 |
 | 成本 | 子集小、快 | 4.4 万图，8B 单卡可控（`max_samples` 限流） |
 
-**主线数据 = DeepFashion-MultiModal（attr_json 任务）**；ChartQA 仅作 pipeline 练手（两套数据脚本同构，切换成本低）。风险对策：数据为 2022 年 → 叙事强调"任务不变、方法新"（用 Qwen3-VL 刷新旧 benchmark 基线）；标签含 NA/hidden 噪声 → 转换时剔除不可见属性，评测与训练口径一致。
+**主线数据 = DeepFashion-MultiModal（attr_json 任务）**；ChartQA 仅作为 pipeline 验证（两套数据脚本同构，切换成本低）。两点注意：数据发布于 2022 年 → 强调"任务不变、方法新"（以 Qwen3-VL 刷新旧 benchmark 基线）；标签含 NA/hidden 噪声 → 转换时剔除不可见属性，评测与训练口径一致。
 
 ### 4.2 数据集与属性体系
 
@@ -134,22 +134,22 @@
 | 面料 | `{upper,lower,outer}_fabric` | denim / cotton / leather / furry / knitted / chiffon / other |
 | 图案 | `{upper,lower,outer}_pattern` | floral / graphic / striped / pure color / lattice / other / color block |
 
-要点：**不可见（NA）与 `hidden` 属性在转换时剔除**，训练/评测只针对可见属性；`outer_*` 仅在图中存在外衣时出现（每图实际输出 10~16 个键）。完整英中对照见 `docs/数据说明.md` 附录。
+要点：**不可见（NA）与 `hidden` 属性在转换时剔除**，训练/评测只针对可见属性；`outer_*` 仅在图中存在外衣时出现（每图实际输出 10~16 个键）。完整英中对照见 `docs/数据说明.md` 2.3。
 
 ### 4.3 任务形态与数据格式
-
-**任务形态**：
 
 | 数据集（dataset_info.json 注册名） | train / val / test | 输入 → 输出 | 定位 |
 |---|---|---|---|
 | `deepfashion_attr_json_*` | 35,276 / 4,410 / 4,410 | 图 + **schema 枚举指令** → 完整属性 JSON | **主线任务** |
 | `deepfashion_attr_json_simple_*` | 35,276 / 4,410 / 4,410 | 图 + 朴素一句话指令 → 完整属性 JSON | 对照实验 |
-| `deepfashion_caption_*` | 34,006 / 4,258 / 4,273 | 图 → 自然语言描述 | 辅助（多任务组合暂不纳入，见 5.4） |
+| `deepfashion_caption_*` | 34,006 / 4,258 / 4,273 | 图 → 自然语言描述 | 辅助（多任务组合暂不纳入，见 5.6） |
 | `deepfashion_attr_qa_*` | 451,744 / 56,860 / 56,943 | 逐属性单问 → 单值 | 弃用（模板重复易过拟合） |
 
-**为什么 attr_json 做主任务**：一次推理输出完整结构化属性，贴合真实电商抽取场景；输出为 JSON，与"图像 → 结构化输出"主线一致；评测可按属性键解构，严谨且细粒度。
+### 4.4 主线任务 `attr_json`
 
-**schema 感知指令**（行业标准结构化输出的数据侧做法；`build_schema_prompt()` 由属性表自动生成，训练/评测共用完整原文）：
+**为什么 attr_json 做主任务**：一次推理输出完整结构化属性，贴合真实电商抽取场景；输出为 JSON，与"图像 → 结构化输出"主线一致；评测可按属性键解构，严谨且细粒度。`simple` 版用于量化 schema 指令 vs 朴素指令的效果差异。
+
+**schema 感知指令**（行业标准结构化输出的数据侧做法；`build_schema_prompt()` 由属性表自动生成，训练/评测共用完整原文），完整指令如下：
 
 ```
 Extract the clothing attributes visible in this image and output a JSON object.
@@ -180,34 +180,21 @@ Rules:
 - Output the JSON object only, without any extra text or explanation.
 ```
 
-结构：① 任务句；② **Allowed keys and values**——枚举全部 18 个属性键及每键合法取值；③ **Rules** 三条输出规则。指令由官方属性表自动生成，键与取值顺序稳定，保证训练/评测/推理三端完全一致。朴素指令对照版（simple）：`Extract the clothing attributes visible in this image and output them as JSON.`
+指令结构：
 
-**训练样本示例**（sharegpt 格式，LLaMA-Factory 直接消费）：
+1. **任务句**：`Extract the clothing attributes visible in this image and output a JSON object.`
+2. **Allowed keys and values**：枚举全部 18 个属性键及每键合法取值。
+3. **Rules**：三条输出规则（只输出可见属性 / 只用合法取值 / 只输出 JSON，不加多余文本）。
 
-```json
-{"messages": [{"role": "user", "content": "<image>Extract the clothing attributes visible in this image and output a JSON object.\n\nAllowed keys and values:\n- sleeve_length: sleeveless, short-sleeve, medium-sleeve, long-sleeve\n...\nRules:\n- Include only keys whose attribute is clearly visible in the image.\n- Use only the allowed values listed above.\n- Output the JSON object only, without any extra text or explanation."}, {"role": "assistant", "content": "{\"sleeve_length\": \"short-sleeve\", \"lower_clothing_length\": \"three-point\", \"socks\": \"no\", \"hat\": \"no\", \"glasses\": \"sunglasses\", \"neckwear\": \"no\", \"wrist_wearing\": \"no\", \"ring\": \"yes\", \"waist_accessories\": \"no\", \"neckline\": \"round\", \"outer_clothing_is_cardigan\": \"no\", \"upper_clothing_covering_navel\": \"no\", \"upper_fabric\": \"cotton\", \"lower_fabric\": \"cotton\", \"upper_pattern\": \"pure color\", \"lower_pattern\": \"lattice\"}"}], "images": ["images/WOMEN-Shorts-id_00005838-04_4_full.jpg"]}
-```
+指令由官方属性表自动生成，键与取值顺序稳定，保证训练/评测/推理三端完全一致。朴素指令对照版（simple）：`Extract the clothing attributes visible in this image and output them as JSON.` 完整训练样本示例（sharegpt 格式）见 `docs/数据说明.md` 4.1。
 
-### 4.4 数据准备与质量保障
+### 4.5 数据准备与质量保障
 
-**下载与解压**（一次性）：
+**流程**：下载压缩包 → 解压 → 转换 → 质量检查。下载与解压命令见 `docs/数据说明.md` 2.2；转换由 `python scripts/data_convert_deepfashion_multi.py`（无参运行，幂等）完成，产出 schema 主线 + simple 对照 + caption + attr_qa 四类数据，详见 `docs/数据说明.md` 3.1。
 
-```bash
-# 官方 GitHub → Google Drive 下载 images.zip / labels.zip / captions.json
-unzip images.zip -d data/data_origin/DeepFashion-MultiModal/   # 44,096 张图
-unzip labels.zip -d data/data_origin/DeepFashion-MultiModal/
-cp captions.json data/data_origin/DeepFashion-MultiModal/
-```
-
-**转换**（schema 主线 + simple 对照 + caption + attr_qa）：
-
-```bash
-conda activate lf
-python scripts/data_convert_deepfashion_multi.py   # 无参运行，幂等；解压产物默认路径
-```
-
-转换规则（脚本内实现）：
 - 按**图片粒度**划分 train/val/test = **80/10/10**（seed=42，三侧图片两两零重叠）——同一张图的所有样本同侧，防泄漏；**test 仅用于最终评测，全程只碰一次**；
+  - **风险说明（套级跨集）**：划分是图片级零重叠（44,096 张图唯一归一侧，绝无同一张图跨集），但不是套级——按 `(id,子序号)` 聚合后，test 的 3,825 个"套"里有 **95%** 在同一款衣服的另一角度图已出现在 train（val 亦然 95%，test∩val 另 27%）。原因：同一款（同款同色）的不同角度（front/side/back/…）被 `random(seed=42)` 打散到三侧。
+  - **为什么这样划分仍成立**：防泄漏的硬约束是"同一张图绝不跨集"（图片级 80/10/10 已满足）；同款跨角度跨集不算标签泄漏——标注按图独立，同款不同角度可见属性不同（正面有领型、侧面可能看不到），test 那张图及其标注从未进过 train。同款跨集的确会让模型获得"这件衣服"的先验，但 test 图是未见角度、判属仍要从图本身提取，且该数据集相似款本就密集，图片级已是最严可行的隔离；改套级可彻底消除先验，但 test 套数骤减，故保留图片级。**面试若被问**：如实说明"图片级零重叠、套级 95% 跨集"，承认同款先验存在但对属性抽取影响有限；要严格可改套级重评。
 - 只保留可见（非 NA/non-hidden）属性；清洗空 caption（原始数据有 7 条空描述，已剔除）；
 - 图片按内容哈希去重，`images/` 字段为相对 `dataset_dir` 路径；
 - 输出目录自带 `dataset_info.json` 注册表，LLaMA-Factory 直接读取。
@@ -227,20 +214,73 @@ python scripts/data_convert_deepfashion_multi.py   # 无参运行，幂等；解
 
 ## 5. 方法：模型与训练
 
-### 5.1 模型与微调配置
+> 本章按「方案 → 依据 → 资源 → 执行 → 口径 → 实验设计」组织：先交代**基座模型**（§5.1）与**微调方案**（§5.2，LoRA + 冻结视觉塔及设计依据），再论证**资源可行性**（§5.3 输入规模与显存算力），随后给出**训练执行与调参**（§5.4）、**评测口径一致性**（§5.5），最后是**消融与对照实验设计**（§5.6，对应结果见 §7）。
+
+### 5.1 基座模型：Qwen3-VL-8B-Instruct
+
+**基座：Qwen3-VL-8B-Instruct（`Qwen3VLForConditionalGeneration`，全模型 bf16）**
+
+据训练实际使用的 `models/Qwen3-VL-8B-Instruct/config.json`（语言+视觉结构；模型参数量以训练日志实测 `all params = 8.81B` 为准）：
+
+| 部分 | 参数 | 数值 |
+|---|---|---|
+| 语言主干 | hidden_size | 4,096 |
+| | 层数 / 注意力头 / KV 头 | 36 / 32 / 8（head_dim=128） |
+| | 中间层 FFN | 12,288 |
+| | 词表 / max_position_embeddings | 151,936 / 262,144 |
+| 视觉塔 | hidden_size / 层数 | 1,152 / 27（`deepstack` 索引 8/16/24 分层缩并） |
+| | 注意力头 / 中间层 | 16 / 4,304 |
+| | patch / 输出 | patch_size=16、temporal_patch 2、`out_hidden=4,096`（对齐语言） |
+| 总量 | **≈ 8.81B** | 语言 + 视觉 + 多模态投影器，全 bf16（训练日志实测 `all params = 8,810,770,672`） |
+
+### 5.2 微调方案：LoRA + 冻结视觉塔
+
+**LoRA 微调（实际训练记录 `llamafactory/saves/dfattr/lora/.../training_args.yaml`）**
 
 | 项 | 配置 |
 |---|---|
-| 基座 | Qwen3-VL-8B-Instruct（约 8.5B） |
-| 微调方式 | LoRA（rank=16, alpha=32, dropout=0.05, target=all），可训练参数 <1% |
-| 优化 | AdamW，lr=1e-4，cosine 调度，warmup 150 步 |
-| 训练 | 3 epoch，等效 batch 36（4/卡 × 3 卡 × 3 累积），3×48GB RTX 4090 DDP |
-| 视觉塔 | **冻结**视觉塔与多模态投影器（小数据防过拟合 + 节省训练资源） |
+| 基座 | Qwen3-VL-8B-Instruct（≈ 8.81B 参数，全部冻结，仅训练 LoRA） |
+| 微调方式 | LoRA（`r=16`、`alpha=32`、`dropout=0.05`、`target=all` → q/k/v/o/gate/down/up 共 7 个投影），可训练 **≈ 43.6M 参数（约 0.5%）** |
+| 优化 | AdamW，`lr=1e-4`，cosine 调度，`warmup=150` 步，`max_grad_norm=1.0` |
+| 训练 | 3 epoch，等效 batch 36（`per_device=4` × 3 卡 DDP × `accum=3`），3×48GB RTX 4090，共 **2,793 步** |
+| 冻结 | **冻结**视觉塔 + 多模态投影器（小数据防过拟合 + 省显存），仅 LoRA 可训练 |
 | 模板 | `qwen3_vl_nothink`（训练-推理一致、关闭 thinking） |
-| 图像 | `image_max_pixels=825,750`（原图 750×1101 像素，**完全不压缩**，训练-推理口径统一） |
-| 训练监控 | val_size 5% 从训练集内切出看 eval loss 曲线（与手动 val/test 零重叠，不污染评测） |
+| 图像 | `image_max_pixels=825,750`（原图 750×1101 像素，**不压缩档**：原图像素数、不主动缩小，训练-推理口径统一）、`image_min_pixels=1024` |
+| 训练数据 | `deepfashion_attr_json_train`（35,276 条，`val_size=0.05` 切出 5% 后实际训练 ≈ 33,512 条/epoch） |
+| 训练监控 | `logging_steps=10`、每 100 步存 checkpoint + 做一次 val eval（28 个点），`train_loss 0.564 → 0.017`，最终选 checkpoint-2793 |
 
-### 5.2 训练步骤与调参
+> 以上数值取自实际训练产物（`training_args.yaml` / `adapter_config.json` / `trainer_state.json` / `all_results.json`），非估算：训练用时 ≈ 35,693s（约 9.9h，3×4090），`train_runtime`，`eval_loss=0.021`（语言建模口径，仅作过拟合监控）。
+
+**为什么冻结视觉塔 + 低秩 LoRA 仍能到 93.8%（面试高频追问）**：
+- **核心机制**：视觉塔（Qwen3-VL 预训练编码器）输出的本就是**通用视觉特征**，冻结它 = 特征提取器不变，LoRA 只微调语言塔、把视觉特征映射到本项目 18 维属性 schema——学"对齐"而非重新学看图；
+- **参数少也够**：可训练仅 43.6M（0.5%）是因为分解能力预训练已有，LoRA 只补"任务接口"；`r=16` 是 8B + 单一抽取任务的稳妥起点（经验区间 16~64），过大收益递减、易过拟合小数据；
+- **不解锁视觉塔**：全训 27 层 × 1,152 参数更贵、小数据易过拟合，留作对照（见 §5.6）。
+
+### 5.3 训练输入规模与资源占用
+
+**单条样本规模（`cutoff_len=2048` 不截断，实测确认）**：
+
+| 项 | 实测 |
+|---|---|
+| 视觉 token（进 LLM） | **784 = 782 占位 + 2 标记**（推算见下「784 怎么来的」） |
+| 文本 token（prompt+答案） | **≈369~509**（平均 ≈459；随 JSON 答案长度浮动，100 条真实样本实测） |
+| 完整序列 = `input_ids` 长度 | **≈1,153~1,293**（平均 ≈1,243）—— 即文本 + 784 个视觉 token，实测 100 条样本 |
+| `cutoff_len=2048` 判定 | 完整序列 1,153~1,293 < 2048 → **不截断**，答案完整保留 |
+
+784 怎么来的（实测 `grid_thw` 推演）：
+- 原图 750×1101（宽×高）→ smart_resize 按 32 倍数对齐（`factor = patch×merge = 16×2`）→ 实际输入 **736×1088**；
+- 切成 16×16 patch → 网格 68×46（`grid_thw=[1, 68, 46]`）共 **3,128** 个；2×2 合并（`spatial_merge=2`）后 `<|image_pad|>` 占位 **782**；
+- 模板再加 `<|vision_start|>` / `<|vision_end|>` 2 个标记 → 进 LLM 视觉 token = 782 + 2 = **784**。
+
+**显存与算力**（bf16、LoRA、冻结视觉塔 + 投影器）：
+
+| 项 | 数值 |
+|---|---|
+| 模型规模 | 基座 `all params = 8,810,770,672`（**8.81B**，含视觉塔 + 投影器）全 bf16（≈ 17.5GB 权重）；`trainable params = 43,646,976`（43.6M，**trainable% = 0.4954**） |
+| 训练显存（3 卡 DDP，每卡） | **峰值 ≈ 30.0GB** —— 用官方 `qwen3vl8b_dfattr_train_cli.yaml`（batch 4 × 3 卡 DDP × accum 3 = 等效 batch 36）实测：GPU0/1/2 峰值 30,711~30,789 MiB ≈ 30.0~30.1GB |
+| 训练成本 | 共 2,793 步，`train_runtime ≈ 9.9h`（3×4090）；`total_flos ≈ 6.31e18` |
+
+### 5.4 训练步骤与调参
 
 ```bash
 # 训练（单机多卡自动走 DDP，默认用全部可见 GPU；本机 3 卡，等效 batch = 4×3×3 = 36）
@@ -255,11 +295,11 @@ llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml
 | JSON 输出乱 | 确认 `qwen3_vl_nothink` 生效；训练前打印渲染样本 |
 | 显存溢出 | 降 batch；确认 gradient_checkpointing 开启 |
 
-### 5.3 评测口径一致性（工程关键）
+### 5.5 评测口径一致性（工程关键）
 
 评测结果的可信度取决于**评测与训练的输入是否完全同口径**。本项目评测生成统一走 llamafactory 管线（与训练同模板 `qwen3_vl_nothink`、同多模态图像 token 展开、同数据格式、同解码参数 greedy），打分由自建 `eval_attr.py` 承担。这一做法源于一次实证发现：若评测改用 transformers 原生渲染（1 个图像占位符 vs 训练时的显式 6~7 个图像 token 展开），30 条实测会有 4 条输出漂移（属性级 99% 一致、文本 87% 一致）——**评测必须与训练同口径**。
 
-### 5.4 消融与对照实验设计
+### 5.6 消融与对照实验设计
 
 > 组织方式按**论证链**分四环：**效果**（微调是否有效）→ **归因**（提升来自哪里）→ **边界**（效果依赖与鲁棒性）→ **过程**（训练稳定性）。所有对照在 **val 集**评测（test 只留最终报告），口径：llamafactory 管线生成预测 + `eval_attr.py stats` 打分。
 
@@ -299,7 +339,7 @@ llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml
 
 ### 6.3 评测执行
 
-> **评测口径**：预测生成**统一走 llamafactory 管线**（与训练 100% 同口径），`scripts/eval_attr.py` 仅承担 `stats` 打分（原因见 §5.3）。
+> **评测口径**：预测生成**统一走 llamafactory 管线**（与训练 100% 同口径），`scripts/eval_attr.py` 仅承担 `stats` 打分（原因见 §5.5）。
 
 ```bash
 # ===== 开发阶段（模型选择/验证）：val 集，可反复跑 =====
@@ -373,7 +413,7 @@ python scripts/eval_attr.py stats --base llamafactory/results/preds_val_base.jso
 | simple-20k | 0.511 | 0.0% |
 | simple-35k | 0.518 | 0.0% |
 
-**沿指令轴（schema vs simple）——指令范式是决定性方法**：相同数据与训练配置下，枚举合法键/取值的指令始终显著优于朴素指令。优势随数据量增大而收窄（+31.5pp→+18.1pp），但朴素指令用全量数据（35k）也只有 75.3%，仍不及 schema 指令用 5k 数据（91.9%）的水平；macro-F1 同样全面落后（补充指标表中全量 0.670 vs 0.518），且 simple 版在三个数据量下全 JSON 匹配率恒为 0.0%（输出从不按 18 维 schema 对齐）。**指令设计决定了结构化输出的成败**——这是任务工程化的方法论收益，直接支撑 §4.3 的设计动机。schema 指令的重要性不止于训练期：推理期若把评测指令替换为 simple，效果同样崩塌（见 §7.3.1）。
+**沿指令轴（schema vs simple）——指令范式是决定性方法**：相同数据与训练配置下，枚举合法键/取值的指令始终显著优于朴素指令。优势随数据量增大而收窄（+31.5pp→+18.1pp），但朴素指令用全量数据（35k）也只有 75.3%，仍不及 schema 指令用 5k 数据（91.9%）的水平；macro-F1 同样全面落后（补充指标表中全量 0.670 vs 0.518），且 simple 版在三个数据量下全 JSON 匹配率恒为 0.0%（输出从不按 18 维 schema 对齐）。**指令设计决定了结构化输出的成败**——这是任务工程化的方法论收益，直接支撑 §4.4 的设计动机。schema 指令的重要性不止于训练期：推理期若把评测指令替换为 simple，效果同样崩塌（见 §7.3.1）。
 
 **沿数据轴（5k→20k→35k）——数据效率极高、堆数据事倍功半**：schema 曲线平缓——数据量从 5k 增至 35.3k 属性准确率仅 +1.5pp，且收益集中在前 20k（5k→20k +1.0pp、全 JSON 匹配率 +5.8pp；20k→35k 边际递减 +0.5pp/+2.2pp），更多数据主要帮助**整段 JSON 的完整性**（少漏键、少缺属性），schema 指令下模型数据效率极高（5k 即达 92% 水平）；simple 曲线陡峭——数据收益 +14.9pp 几乎全被"追赶指令差距"消耗（20k 即 +13.6pp 后趋平），说明没有好的指令设计，堆数据事倍功半。
 
@@ -595,7 +635,7 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 | 路径 | 内容 |
 |---|---|
 | `scripts/convert_preds.py` | 把 llamafactory predict 输出（`generated_predictions.jsonl`）转为 `eval_attr.py stats` 可消费的预测文件 |
-| `scripts/eval_attr.py` | 评测打分：`stats`（属性级 acc / macro-F1 / 分层 / McNemar）；预测生成走 llamafactory 管线（口径见 §5.3 / §6.3） |
+| `scripts/eval_attr.py` | 评测打分：`stats`（属性级 acc / macro-F1 / 分层 / McNemar）；预测生成走 llamafactory 管线（口径见 §5.5 / §6.3） |
 | `llamafactory/eval_outputs/` | 评测生成预测（`generated_predictions.jsonl` 等，按实验分目录） |
 | `llamafactory/results/` | 评测汇总与评测日志（`preds_*.jsonl`、报告、数据统计、`eval_*.log`） |
 
@@ -640,14 +680,14 @@ llamafactory-cli train llamafactory/config/qwen3vl8b_dfattr_train_cli.yaml
 # 单卡：CUDA_VISIBLE_DEVICES=0，并把 gradient_accumulation_steps 改为 9
 ```
 
-**④ 消融**（指令范式 × 数据量，见 §5.4 / §7.2）
+**④ 消融**（指令范式 × 数据量，见 §5.6 / §7.2）
 
 ```bash
 # 训练：llamafactory/config/ablation/*.yaml（schema/simple × 5k/20k/35k）
 # 打分：同 ⑤，产物在 llamafactory/results/report_ablation.md
 ```
 
-**⑤ 评测**（正式口径：llamafactory 管线生成预测 + `eval_attr.py stats` 打分，原理与边界见 §5.3）
+**⑤ 评测**（正式口径：llamafactory 管线生成预测 + `eval_attr.py stats` 打分，原理与边界见 §5.5）
 
 ```bash
 # 开发阶段：val 集，可反复跑（两份配置除 eval_dataset 外一致）
@@ -703,6 +743,10 @@ python scripts/serve_gradio.py                                # Web → http://1
 | 为什么冻结视觉塔？ | 小数据防过拟合 + 节省训练资源；解冻作对照暂不纳入（成本高、结果方向不可控） |
 | JSON 解析失败怎么办？ | 三级容错解析；格式错误单列统计（≥98% 达标） |
 | 怎么防泄漏？ | 按图划分 80/10/10（seed 42）；test 只在最终评测碰一次 |
-| LoRA rank 怎么定？ | 经验区间 16-64；当前用 16，计划补 r=8/32 消融（5k 数据，可选） |
+| LoRA rank 怎么定？ | 经验区间 16-64，当前用 16（8B+单一抽取任务够用、过大易过拟合）；计划补 r=8/32 消融（5k 数据，可选） |
+| 为什么冻结视觉塔还涨这么猛？ | 视觉塔输出通用特征，LoRA 微调**语言塔**学"特征→18 维 schema"映射；可训练仅 0.5% 已够，因分解能力预训练已有 |
+| 数据怎么防泄漏？ | 图片级 80/10/10（seed 42）严格零重叠、test 只碰一次；但要如实说明：按图划分下**套级会跨集**（同款不同角度分属两侧，test 95% 套在 train 出现过）——标注按图独立、同款跨集仅提供先验，对属性抽取影响有限；严格评测可改套级划分重评 |
+| 单条样本占多少 token？会不会截断？ | 视觉 ≈**784**（782 个占位符 + 2 个标记，推算见 §5.3 下方列表）+ 文本 ≈369~509 = **完整序列 ≈1,153~1,293** < `cutoff_len=2048`，不截断；3,128 是未 merge 的 patch 数、非进 LLM 的 token |
+| 训练显存/成本？ | 实测（官方 CLI 配置 3 卡 DDP）：基座 8.81B bf16 ≈17.5GB 权重 + LoRA 43.6M（trainable 0.495%）；**每卡训练峰值 ≈30.0GB**（batch 4 × 3 卡 DDP，48G 4090），共 2,793 步约 9.9h |
 | schema 指令比一句话好在哪？ | 键名/取值不漂移、格式错误率下降（对照实验量化） |
 | 相似款检索怎么做？ | 属性约束 + 视觉 embedding 余弦混合加权，官方标注约束、只加载视觉塔（详见 §9） |

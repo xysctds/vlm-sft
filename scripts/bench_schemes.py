@@ -60,6 +60,25 @@ def _emit(*args):
     _log.flush()
 
 
+def _load_snapshot() -> str:
+    """测量时刻的机器负载快照（load average + 吃 CPU 的进程），用于溯源绝对时长。"""
+    import platform
+    import resource
+    try:
+        la = os.getloadavg()
+    except (OSError, AttributeError):
+        la = (-1.0, -1.0, -1.0)
+    # 前 5 个吃 CPU 的进程（避开自身）
+    try:
+        out = subprocess.check_output(
+            ["ps", "-eo", "pcpu,comm", "--sort=-pcpu"], text=True).splitlines()[1:]
+        top = [ln.strip() for ln in out[:5]]
+    except Exception:
+        top = ["(ps 不可用)"]
+    return (f"[快照 {time.strftime('%Y-%m-%d %H:%M:%S')}] load={la[0]:.0f}/{la[1]:.0f}/{la[2]:.0f} "
+            f"cpu核={os.cpu_count()}  TOP-CPU: " + " | ".join(top))
+
+
 def _retrieve(qv: np.ndarray, attrs: dict) -> None:
     """真实检索（属性加权 + 按套聚合，top-5），索引单例缓存。"""
     global _idx_cache
@@ -150,6 +169,7 @@ def main() -> None:
                ("optimized", "优化后(视觉塔·预热)")]
 
     _emit(f"==== 统一基准：一次点击出结果（各 {n} 次独立进程，查询图={os.path.basename(path)}） ====")
+    _emit(_load_snapshot())
     results = {}
     for key, label in schemes:
         rows = []
@@ -175,6 +195,7 @@ def main() -> None:
     _emit(f"基准A→优化后 : {fa:.2f}s → {fo:.2f}s   {fa / fo:.1f}x")
     _emit(f"基准B→优化后 : {fb:.2f}s → {fo:.2f}s   {fb / fo:.1f}x")
     _emit(f"基准A→基准B : {fa:.2f}s → {fb:.2f}s   {fa / fb:.1f}x  (这一刀=只加载视觉塔)")
+    _emit(_load_snapshot())
     _emit(f"[log] 已保存: {LOG}")
 
 

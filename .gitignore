@@ -1,14 +1,21 @@
+# 杂物间（git 外，保留原样）
 alpha
 backup
+
+# 外部资产（软链）
 data
-llamafactory/saves
-llamafactory/eval_outputs
-*.pyc
-llamafactory/results/preds_*.jsonl
-llamafactory/results/eval_*.log
-llamafactory/results/vllm_serve.log
-llamafactory/results/gradio.log
-llamafactory/config/ckpt_screen/ckpt_*.yaml
-llamafactory/llamaboard_cache/
 models/
+
+# 工具目录
+__pycache__/
+*.pyc
 *.log
+
+# experiments/ 工作产物（按实验拆分后，配置/报告跟踪，权重/预测/缓存忽略）
+experiments/*/weights/
+experiments/*/predictions/
+experiments/llamaboard_cache/
+experiments/*/reports/preds_*.jsonl
+experiments/*/reports/eval_*.log
+experiments/ckpt_screen/config/ckpt_*.yaml
+experiments/smoke/*.csv

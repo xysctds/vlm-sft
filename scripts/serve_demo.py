@@ -4,7 +4,7 @@
 
 先启动 vLLM 服务（在仓库根目录）::
 
-    vllm serve llamafactory/saves/dfattr/merged/qwen3vl8b_dfattr_merged --served-model-name deepfashion --port 8000
+    vllm serve experiments/main/weights/merged/qwen3vl8b_dfattr_merged --served-model-name deepfashion --port 8000
 
 然后运行::
 
