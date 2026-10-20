@@ -1,5 +1,7 @@
-# 杂物间（git 外，保留原样）
-alpha
+# 第三方代码与早期资料（git 外）
+/vendor/*
+!/vendor/README.md
+/scratch/
 backup
 
 # 外部资产（软链）
@@ -19,3 +21,5 @@ experiments/*/reports/preds_*.jsonl
 experiments/*/reports/eval_*.log
 experiments/ckpt_screen/config/ckpt_*.yaml
 experiments/smoke/*.csv
+
+experiments/badcase_opt

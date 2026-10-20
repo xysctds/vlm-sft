@@ -26,13 +26,14 @@
 
 ```
 vlm/
-├── data/                   # 数据集
-├── models/                 # 模型（基座 Qwen3-VL-8B/32B、Qwen2.5-1.5B + merged/）
+├── data/                   # 数据集（软链，不入库）
+├── models/                 # 模型（软链，不入库）：基座 Qwen3-VL-8B/32B、Qwen2.5-1.5B、merged/
 ├── docs/                   # 主文档（方案+实验报告）+ 检索方案 + 运维手册 + 示例样本
 ├── experiments/            # 实验工作台：按实验组织（配置/脚本/预测/报告/权重自成一目录）
-├── requirements_lf_full.txt # lf 环境依赖（pip freeze 全量精确版，可直接复现）
 ├── scripts/                # 通用脚本（数据转换 / 评测打分 / 部署 / 检索）；实验专属脚本在各实验 scripts/
-└── alpha/                  # 杂物间（git 忽略）：上游源码/早期实验/资料，不纳入主线
+├── requirements_lf_full.txt # lf 环境依赖（pip freeze 全量精确版，可直接复现）
+├── vendor/                 # 第三方代码与资料（不入库，来源见 vendor/README.md）
+└── scratch/                # 早期实验与资料（不入库）
 ```
 
 ---
