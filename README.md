@@ -33,7 +33,7 @@ vlm/
 |---|---|---|
 | `data/` | 数据集：原始数据 + 转换产物（**软链**，git 忽略） | [数据说明](docs/数据说明.md) |
 | `docs/` | 项目文档：主文档 + 5 份专题说明 + 复现 / 面试文档 | [文档索引](docs/README.md) |
-| `experiments/` | 实验工作台：`<基座>/<实验域>/`，每个域一个 README | [实验索引](experiments/README.md) |
+| `experiments/` | 实验工作台：`<基座>/<实验域>/`（8B 五个域 + 27B 三个域），每个域一个 README | [实验索引](experiments/README.md) |
 | `scripts/` | 通用脚本：数据转换 / 评测打分 / 检索 / 部署与 demo | [脚本索引](scripts/README.md) |
 | `models/` | 基座模型（**软链**，git 忽略） | — |
 

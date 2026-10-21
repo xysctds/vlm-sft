@@ -1,0 +1,40 @@
+# 消融评测（27B）：schema-5k 训练出的 LoRA 在 **schema 指令** val 全量上生成预测
+#
+# 与 8B 消融评测 experiments/qwen3vl8b/ablation/config/qwen3vl8b_dfattr_eval_ablate_schema5k.yaml 的差异：
+#   1) model_name_or_path  -> models/Qwen3.8-27B
+#   2) adapter_name_or_path-> experiments/qwen38_27b/ablation/weights/qwen38_27b_schema_5k
+#   3) 模板/思考开关        -> qwen3_5 + enable_thinking: false
+#   4) deepspeed           -> ds_z3_27b.json（仅记录原始设计，实际执行入口见下）
+# 其余（eval_dataset=deepfashion_attr_json_val / cutoff / max_new_tokens / greedy / seed / 分辨率）逐字一致。
+#
+# 【执行方式】27B 不能走 llamafactory-cli train（predict_with_generate + ZeRO-3 被硬禁止），
+# 实际由 experiments/qwen38_27b/main/scripts/infer_27b.py 执行（device_map="auto" 3 卡模型并行，
+# 模板 / mm_plugin / 解码口径与 llamafactory 逐字一致）：
+#   python experiments/qwen38_27b/main/scripts/infer_27b.py --config experiments/qwen38_27b/ablation/config/qwen38_27b_dfattr_eval_ablate_schema5k.yaml
+
+stage: sft
+model_name_or_path: models/Qwen3.8-27B
+adapter_name_or_path: experiments/qwen38_27b/ablation/weights/qwen38_27b_schema_5k
+preprocessing_num_workers: 4
+finetuning_type: lora
+quantization_method: bnb   # quantization_bit 默认 none => 实际不量化（bf16 加载）
+template: qwen3_5
+enable_thinking: false
+use_reentrant_gc: false
+flash_attn: auto
+deepspeed: experiments/qwen38_27b/main/config/ds_z3_27b.json
+dataset_dir: data/data_convert/deepfashion_multi
+eval_dataset: deepfashion_attr_json_val
+cutoff_len: 2048
+max_samples: 100000
+per_device_eval_batch_size: 4
+predict_with_generate: true
+report_to: none
+max_new_tokens: 512
+do_sample: false   # greedy 确定性解码
+seed: 42
+image_max_pixels: 825750   # 与训练/8B 消融一致（不压缩）
+output_dir: experiments/qwen38_27b/ablation/predictions/qwen38_27b_ablate_schema5k
+trust_remote_code: true
+ddp_timeout: 180000000
+do_predict: true

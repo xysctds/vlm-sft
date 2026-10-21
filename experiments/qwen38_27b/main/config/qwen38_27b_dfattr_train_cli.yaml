@@ -1,0 +1,71 @@
+# LoRA 微调：Qwen3.8-27B 在 DeepFashion 属性 JSON 抽取任务上（主实验 27B 版）
+#
+# 与 8B 主实验（experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_train_cli.yaml）的差异：
+#   1) model_name_or_path  Qwen3-VL-8B-Instruct -> Qwen3.8-27B
+#   2) 模板/思考开关        qwen3_vl_nothink     -> qwen3_5 + enable_thinking: false
+#      · Qwen3.8-27B 是**默认开启 thinking** 的推理模型（chat_template 里 enable_thinking 未定义即为 true），
+#        直接套 qwen3_5_nothink（普通模板、不注入空 cot）时 prompt 以 "<|im_start|>assistant\n" 结尾，
+#        模型仍会自己生成 <think>…（已实测：冒烟推理输出整段推理过程而非 JSON）。
+#      · qwen3_5（ReasoningTemplate）+ enable_thinking: false 会把空 cot "<think>\n\n</think>\n\n" 放进
+#        prompt 且不计 loss，response 为纯 JSON——这才是该模型族「不思考」的等价形式，输出口径与 8B 一致。
+#   3) deepspeed           新增 ds_z3_27b.json（ZeRO-3）：27B bf16 权重约 54GB > 单卡 48GB，
+#      DDP 每卡放不下完整副本，必须分片。
+#   4) use_reentrant_gc    新增 false —— **本环境跑通 27B 的决定性开关**：
+#      reentrant 检查点的 backward 重算会绕过 DeepSpeed ZeRO-3 的参数释放逻辑，实测显存 4.2GB -> 47GB 直接 OOM；
+#      换非重入检查点后显存峰值稳定在 ~46GB（batch=4），训练正常。原因与复现记录见 predictions/logs/。
+#
+# 等效 batch 与 8B 主实验**完全一致**：4(每卡) × 3(卡) × 3(累积) = 36
+# 其余超参（lr / epoch / cutoff / LoRA rank·alpha·target / 分辨率 / freeze 策略 / seed）逐字一致。
+#
+# 显存与吞吐实测（3×RTX4090 48G）：峰值 46.2GB/卡，508 tokens/s => 全程约 70 小时
+# 训练样本 token 长度实测：min1170 / p50 1268 / max1316，无一条超 cutoff_len=2048，显存峰值可预测
+#
+# 运行：bash experiments/qwen38_27b/main/scripts/run_train_27b.sh
+
+stage: sft
+do_train: true
+model_name_or_path: models/Qwen3.8-27B
+preprocessing_num_workers: 16
+finetuning_type: lora
+template: qwen3_5
+enable_thinking: false
+flash_attn: auto
+deepspeed: experiments/qwen38_27b/main/config/ds_z3_27b.json
+use_reentrant_gc: false
+dataset_dir: data/data_convert/deepfashion_multi
+dataset: deepfashion_attr_json_train
+cutoff_len: 2048
+learning_rate: 0.0001
+num_train_epochs: 3.0
+max_samples: 100000
+seed: 42
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 3   # 3 卡 ZeRO-3：等效 batch = 4(每卡) × 3(卡) × 3 = 36，与 8B 主实验一致
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
+logging_steps: 10
+save_steps: 100
+warmup_steps: 150               # ≈5.4% × 2,793 步（与 8B 同比例）
+packing: false
+report_to: none
+output_dir: experiments/qwen38_27b/main/weights/lora/qwen38_27b_dfattr_lora
+bf16: true
+plot_loss: true
+trust_remote_code: true
+ddp_timeout: 180000000
+include_num_input_tokens_seen: true
+optim: adamw_torch
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+image_max_pixels: 825750       # 原图 750×1101 = 825,750 像素，与 8B 主实验一致（不压缩）
+image_min_pixels: 1024
+video_max_pixels: 65536
+video_min_pixels: 256
+val_size: 0.05                  # 从训练集内部切 5% 画 val loss 曲线（与手动 val/test 零重叠）
+eval_strategy: steps
+eval_steps: 100
+per_device_eval_batch_size: 4

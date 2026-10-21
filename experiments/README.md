@@ -16,7 +16,21 @@
 | [ablation](qwen3vl8b/ablation/README.md) | 指令范式消融：schema / simple × 5k / 20k / 35k |
 | [ckpt_screen](qwen3vl8b/ckpt_screen/README.md) | checkpoint 快筛与全量确认（`ckpt_*.yaml` 由脚本自动生成） |
 | [badcase_study](qwen3vl8b/badcase_study/README.md) | 坏例诊断与干预实证：样本级分析 → 难例续训（负结果）→ 约束解码可救性 → 强化 prompt 重训（未跑完） |
-| [smoke](qwen3vl8b/smoke/README.md) | 训练可行性验证、token / 显存基准（不属于主结果） |
+| [smoke](qwen3vl8b/smoke/README.md) | 训练可行性验证与 token / 显存基准：确认能不能跑、显存够不够、样本有多长 |
+
+## Qwen3.8-27B（换基座复跑）
+
+| 实验域 | 内容 |
+|---|---|
+| [main](qwen38_27b/main/README.md) | 主实验：训练 / 导出 / 8 个评测变体 / 5 份报告 |
+| [ablation](qwen38_27b/ablation/README.md) | 指令范式 × 数据量消融（5k 两格） |
+| [ckpt_screen](qwen38_27b/ckpt_screen/README.md) | checkpoint 快筛（15 点 × 500 条 val） |
+
+换基座的决策、四处必要差异与结果对比见[换基座实验](../docs/换基座实验.md)。
+
+- 跨域工具在 `qwen38_27b/scripts/`：`check_paths.py`（仓库结构自检）、`smoke_qwen38_load.py`（加载冒烟）
+- 日志在 `qwen38_27b/logs/`（git 忽略）
+- 27B 的评测不走 `llamafactory-cli train`（`predict_with_generate` 与 ZeRO-3 互斥），统一走 `qwen38_27b/main/scripts/infer_27b.py`，输出与 8B 同格式、下游零改动
 
 `llamaboard_cache/` 是 WebUI 缓存，git 忽略。
 

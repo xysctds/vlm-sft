@@ -1,0 +1,62 @@
+# 消融（27B）：指令范式 × 数据量 —— schema 指令 + 5k 数据
+#
+# 与 8B 消融配置 experiments/qwen3vl8b/ablation/config/qwen3vl8b_dfattr_ablate_schema5k_train.yaml 的差异，
+# 与主实验迁移完全同源（只有 4 类必要项，超参逐字一致）：
+#   1) model_name_or_path  Qwen3-VL-8B-Instruct -> Qwen3.8-27B
+#   2) 模板/思考开关        qwen3_vl_nothink -> qwen3_5 + enable_thinking: false
+#   3) deepspeed           新增 ds_z3_27b.json（27B bf16 约 54GB > 单卡 48GB，必须 ZeRO-3 分片）
+#   4) use_reentrant_gc    新增 false（跑通 27B 的决定性开关，见 27B迁移说明.md 2.3）
+#
+# 唯一的行为变量 = max_samples 5000（与 8B 消融同格）。
+# 等效 batch 与 8B 消融完全一致：4(每卡) × 3(卡) × 3(累积) = 36
+# 5k × 3 epoch ÷ 36 ≈ 417 步；实测 63 秒/步 => 约 7.3 小时
+#
+# 运行：bash experiments/qwen38_27b/ablation/scripts/run_ablate_27b.sh schema5k
+
+stage: sft
+do_train: true
+model_name_or_path: models/Qwen3.8-27B
+preprocessing_num_workers: 16
+finetuning_type: lora
+template: qwen3_5
+enable_thinking: false
+flash_attn: auto
+deepspeed: experiments/qwen38_27b/main/config/ds_z3_27b.json
+use_reentrant_gc: false
+dataset_dir: data/data_convert/deepfashion_multi
+dataset: deepfashion_attr_json_train
+cutoff_len: 2048
+learning_rate: 0.0001
+num_train_epochs: 3.0
+max_samples: 5000
+seed: 42
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 3   # 3 卡 ZeRO-3：等效 batch = 4(每卡) × 3(卡) × 3 = 36，与 8B 消融一致
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
+logging_steps: 10
+save_steps: 1000   # 消融只需最终模型（总步数 417 < 1000，训练结束自动落盘）
+warmup_steps: 20   # 与 8B 消融同值（≈5% × 417 步）
+packing: false
+report_to: none
+output_dir: experiments/qwen38_27b/ablation/weights/qwen38_27b_schema_5k
+bf16: true
+plot_loss: true
+trust_remote_code: true
+ddp_timeout: 180000000
+include_num_input_tokens_seen: true
+optim: adamw_torch
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+image_max_pixels: 825750   # 原图 750×1101 = 825,750 像素，与 8B 消融一致（不压缩）
+image_min_pixels: 1024
+video_max_pixels: 65536
+video_min_pixels: 256
+val_size: 0.05
+eval_strategy: steps
+eval_steps: 100
+per_device_eval_batch_size: 4

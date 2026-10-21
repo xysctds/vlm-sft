@@ -1,0 +1,37 @@
+# 消融评测（27B）：simple-5k 训练出的 LoRA 在 **schema 指令** val 全量上生成预测
+#
+# 注意：该 arm 训练期用 simple 指令，但**评测期 prompt 仍固定为 schema 指令**
+# （eval_dataset=deepfashion_attr_json_val），与 8B 消融口径完全一致 ——
+# 这样才能把「训练期指令范式」作为唯一变量分离出来。
+#
+# 与 schema5k 评测版的唯一差异 = adapter_name_or_path 与 output_dir。
+#
+# 【执行方式】由 experiments/qwen38_27b/main/scripts/infer_27b.py 执行（原因见 schema5k 评测版注释）：
+#   python experiments/qwen38_27b/main/scripts/infer_27b.py --config experiments/qwen38_27b/ablation/config/qwen38_27b_dfattr_eval_ablate_simple5k.yaml
+
+stage: sft
+model_name_or_path: models/Qwen3.8-27B
+adapter_name_or_path: experiments/qwen38_27b/ablation/weights/qwen38_27b_simple_5k
+preprocessing_num_workers: 4
+finetuning_type: lora
+quantization_method: bnb
+template: qwen3_5
+enable_thinking: false
+use_reentrant_gc: false
+flash_attn: auto
+deepspeed: experiments/qwen38_27b/main/config/ds_z3_27b.json
+dataset_dir: data/data_convert/deepfashion_multi
+eval_dataset: deepfashion_attr_json_val
+cutoff_len: 2048
+max_samples: 100000
+per_device_eval_batch_size: 4
+predict_with_generate: true
+report_to: none
+max_new_tokens: 512
+do_sample: false
+seed: 42
+image_max_pixels: 825750
+output_dir: experiments/qwen38_27b/ablation/predictions/qwen38_27b_ablate_simple5k
+trust_remote_code: true
+ddp_timeout: 180000000
+do_predict: true

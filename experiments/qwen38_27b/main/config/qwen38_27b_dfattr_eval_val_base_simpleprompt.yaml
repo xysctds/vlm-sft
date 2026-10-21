@@ -1,0 +1,43 @@
+# 补充对照（27B）：**基座 + simple 指令** 在 val 上生成预测
+#
+# 目的：补齐「模型 × 指令范式」的推理侧 2×2，回答一个 27B 特有的问题 ——
+#   基座模型在 simple 指令下也会像 LoRA 一样崩掉吗（= 结构化输出依赖是模型固有行为），
+#   还是只有微调后才崩（= 微调造成的 schema 过拟合）？
+#   已有的三个格子：base×schema 82.6% / base×2shot 80.8% / lora×schema 93.4% / lora×simple 0.4%
+#
+# 与 experiments/qwen38_27b/main/config/qwen38_27b_dfattr_eval_val_base.yaml 的唯一差异：
+#   eval_dataset  deepfashion_attr_json_val -> deepfashion_attr_json_simple_val
+#   output_dir    ..._27b -> val_base_simpleprompt_27b
+# 其余（基座 / 模板 / 思考开关 / 解码 / seed / 分辨率）逐字一致。
+#
+# 【注】8B 侧没有对应格子（8B 补充实验只做了 lora×simple），因此本结果作为
+# 27B-only 的诊断项报告，不与 8B 做跨基座对比。
+#
+# 【执行方式】由 experiments/qwen38_27b/main/scripts/infer_27b.py 执行：
+#   python experiments/qwen38_27b/main/scripts/infer_27b.py --config experiments/qwen38_27b/main/config/qwen38_27b_dfattr_eval_val_base_simpleprompt.yaml
+
+stage: sft
+model_name_or_path: models/Qwen3.8-27B
+preprocessing_num_workers: 4
+finetuning_type: lora   # 无 adapter_name_or_path 时即加载纯 base
+quantization_method: bnb   # quantization_bit 默认 none => 实际不量化（bf16 加载）
+template: qwen3_5
+enable_thinking: false
+use_reentrant_gc: false
+flash_attn: auto
+deepspeed: experiments/qwen38_27b/main/config/ds_z3_27b.json
+dataset_dir: data/data_convert/deepfashion_multi
+eval_dataset: deepfashion_attr_json_simple_val
+cutoff_len: 2048
+max_samples: 100000
+per_device_eval_batch_size: 4
+predict_with_generate: true
+report_to: none
+max_new_tokens: 512
+do_sample: false
+seed: 42
+image_max_pixels: 825750
+output_dir: experiments/qwen38_27b/main/predictions/val_base_simpleprompt_27b
+trust_remote_code: true
+ddp_timeout: 180000000
+do_predict: true

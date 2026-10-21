@@ -1,0 +1,54 @@
+# 冒烟验证（27B）：用极小样本量把「ZeRO-3 + LoRA + qwen3_5 多模态」整条训练链路跑通，
+# 目的只有两个：① 确认不 OOM、② 确认能正常出 loss 与保存 adapter。
+# 与正式配置 qwen38_27b_dfattr_train_cli.yaml 的差异只有「跑多少 / 存哪里 / 评不评」：
+#   num_train_epochs 3->1、max_samples 100000->432（≈12 个优化步）、save_steps 100->100000、
+#   eval_strategy steps->no、val_size 0.05->0、logging_steps 10->1、output_dir -> _smoke_27b
+# 超参（lr / cutoff / LoRA / 分辨率 / freeze / batch / accum / deepspeed / seed）逐字一致。
+#
+# 运行：llamafactory-cli train experiments/qwen38_27b/main/config/qwen38_27b_dfattr_train_smoke.yaml
+
+stage: sft
+do_train: true
+model_name_or_path: models/Qwen3.8-27B
+preprocessing_num_workers: 16
+finetuning_type: lora
+template: qwen3_5
+enable_thinking: false
+flash_attn: auto
+deepspeed: experiments/qwen38_27b/main/config/ds_z3_27b.json
+dataset_dir: data/data_convert/deepfashion_multi
+dataset: deepfashion_attr_json_train
+cutoff_len: 2048
+learning_rate: 0.0001
+num_train_epochs: 1
+max_samples: 432
+seed: 42
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 12
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
+logging_steps: 1
+save_steps: 100000
+warmup_steps: 10
+packing: false
+report_to: none
+output_dir: experiments/qwen38_27b/main/weights/lora/_smoke_27b
+bf16: true
+plot_loss: true
+trust_remote_code: true
+ddp_timeout: 180000000
+include_num_input_tokens_seen: true
+optim: adamw_torch
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+image_max_pixels: 825750
+image_min_pixels: 1024
+video_max_pixels: 65536
+video_min_pixels: 256
+val_size: 0
+eval_strategy: "no"
+per_device_eval_batch_size: 4

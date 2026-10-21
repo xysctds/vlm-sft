@@ -1,0 +1,40 @@
+# 正式评测（27B 版）：基座 2-shot（schema+示例）在 val 上生成预测
+# 与 8B 同口径配置 experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_eval_val_base_fewshot.yaml 的差异仅三项：
+#   1) model_name_or_path  -> models/Qwen3.8-27B
+#   2) 模板/思考开关        -> qwen3_5 + enable_thinking: false（27B 默认开启 thinking，
+#      与训练侧同一处理：把空 cot 放进 prompt 且不计 loss，response 为纯 JSON，输出口径与 8B 一致）
+#   3) deepspeed           -> ds_z3_27b.json（27B bf16 约 54GB > 单卡 48GB，必须 ZeRO-3 分片）
+# 其余（数据集 / cutoff / batch / max_new_tokens / 解码策略 / seed / 分辨率）逐字一致，输出目录加 _27b 后缀不覆盖 8B 产物。
+#
+# 【执行方式】27B 的预测**不能**用 `llamafactory-cli train` 跑：parser.py 硬禁止
+# `predict_with_generate` 与 ZeRO-3 组合，而 27B 单卡 48GB 装不下、必须跨卡，两者无解。
+# 实际入口是 experiments/qwen38_27b/main/scripts/infer_27b.py（device_map="auto" 3 卡模型并行，
+# 模板 / mm_plugin / 解码口径与 llamafactory 逐字一致，输出同格式 generated_predictions.jsonl）：
+#   python experiments/qwen38_27b/main/scripts/infer_27b.py --config experiments/qwen38_27b/main/config/qwen38_27b_dfattr_eval_val_base_fewshot.yaml
+# 本文件里的 deepspeed 字段仅用于记录原始设计，infer_27b.py 会忽略它。
+
+stage: sft
+model_name_or_path: models/Qwen3.8-27B
+preprocessing_num_workers: 4
+finetuning_type: lora   # 无 adapter_name_or_path 时即加载纯 base
+quantization_method: bnb   # quantization_bit 默认 none => 实际不量化（bf16 加载）
+template: qwen3_5
+enable_thinking: false
+use_reentrant_gc: false
+flash_attn: auto
+deepspeed: experiments/qwen38_27b/main/config/ds_z3_27b.json
+dataset_dir: data/data_convert/deepfashion_multi
+eval_dataset: deepfashion_attr_json_fewshot_val
+cutoff_len: 2048
+max_samples: 100000
+per_device_eval_batch_size: 4
+predict_with_generate: true
+report_to: none
+max_new_tokens: 512
+do_sample: false   # greedy 确定性解码（transformers>=5.8 不接受 temperature=0.0，用 do_sample 声明）
+seed: 42
+image_max_pixels: 825750   # 原图 750×1101 = 825,750 像素，与训练一致（不压缩）
+output_dir: experiments/qwen38_27b/main/predictions/val_base_fewshot_27b
+trust_remote_code: true
+ddp_timeout: 180000000
+do_predict: true

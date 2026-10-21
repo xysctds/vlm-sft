@@ -1,0 +1,22 @@
+# 导出合并（27B 版）：把 LoRA adapter 合并回基座，得到完整模型
+# 与 8B 导出配置 experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_export_cli.yaml 的差异：
+#   1) model_name_or_path -> models/Qwen3.8-27B
+#   2) template           -> qwen3_5（与训练/评测同一口径）
+#   3) export_device      -> cpu（27B bf16 约 54GB > 单卡 48GB，GPU 单卡放不下；本机内存 503GB 充裕）
+#   4) export_dir         -> 独立目录，不覆盖 8B 的 qwen3vl8b_dfattr_merged
+#
+# 注意：合并 LoRA adapter 时不要用量化模型或 quantization_bit
+#
+# 运行：llamafactory-cli export experiments/qwen38_27b/main/config/qwen38_27b_dfattr_export_cli.yaml
+
+### 模型
+model_name_or_path: models/Qwen3.8-27B
+adapter_name_or_path: experiments/qwen38_27b/main/weights/lora/qwen38_27b_dfattr_lora
+template: qwen3_5
+trust_remote_code: true
+
+### 导出
+export_dir: experiments/qwen38_27b/main/weights/merged/qwen38_27b_dfattr_merged
+export_size: 5
+export_device: cpu  # 27B 单卡装不下，用 CPU 合并（内存 503GB）
+export_legacy_format: false

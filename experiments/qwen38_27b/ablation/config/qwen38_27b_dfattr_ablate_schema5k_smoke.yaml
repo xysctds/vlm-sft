@@ -1,0 +1,54 @@
+# 冒烟验证（消融 27B）：把「ZeRO-3 + LoRA + 5k 消融配置」整条链路快速跑通，
+# 目的只有三个：① 不 OOM、② 能出 loss、③ 能落盘 adapter。
+# 与正式配置 qwen38_27b_dfattr_ablate_schema5k_train.yaml 的差异只有「跑多少 / 存哪里 / 评不评」：
+#   max_samples 5000->216（≈6 个优化步）、save_steps 1000->6、eval_strategy steps->no、
+#   val_size 0.05->0、output_dir -> /tmp 下的临时目录。超参逐字一致。
+#
+# 运行：llamafactory-cli train experiments/qwen38_27b/ablation/config/qwen38_27b_dfattr_ablate_schema5k_smoke.yaml
+
+stage: sft
+do_train: true
+model_name_or_path: models/Qwen3.8-27B
+preprocessing_num_workers: 16
+finetuning_type: lora
+template: qwen3_5
+enable_thinking: false
+flash_attn: auto
+deepspeed: experiments/qwen38_27b/main/config/ds_z3_27b.json
+use_reentrant_gc: false
+dataset_dir: data/data_convert/deepfashion_multi
+dataset: deepfashion_attr_json_train
+cutoff_len: 2048
+learning_rate: 0.0001
+num_train_epochs: 3.0
+max_samples: 216
+seed: 42
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 3
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
+logging_steps: 1
+save_steps: 6
+warmup_steps: 2
+packing: false
+report_to: none
+output_dir: /tmp/ablate_27b_smoke
+bf16: true
+plot_loss: false
+trust_remote_code: true
+ddp_timeout: 180000000
+include_num_input_tokens_seen: true
+optim: adamw_torch
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+image_max_pixels: 825750
+image_min_pixels: 1024
+video_max_pixels: 65536
+video_min_pixels: 256
+val_size: 0
+eval_strategy: "no"
+per_device_eval_batch_size: 4

@@ -20,7 +20,7 @@ experiments/*/*/weights/
 experiments/*/*/predictions/
 experiments/*/*/reports/preds_*.jsonl
 experiments/*/*/reports/eval_*.log
-experiments/*/*/config/ckpt_*.yaml
+experiments/*/*/config/ckpt*.yaml
 experiments/*/smoke/*.csv
 
 # badcase_study：代码/配置/报告入库，派生数据集与图片软链不入库
