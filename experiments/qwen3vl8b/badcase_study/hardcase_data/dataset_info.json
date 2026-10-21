@@ -1,0 +1,16 @@
+{
+  "deepfashion_attr_json_hard_train": {
+    "file_name": "deepfashion_attr_json_hard_train.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages",
+      "images": "images"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant"
+    }
+  }
+}

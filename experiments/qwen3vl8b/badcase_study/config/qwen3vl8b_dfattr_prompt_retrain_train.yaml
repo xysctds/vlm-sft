@@ -1,0 +1,50 @@
+# 强化 prompt 重训（prompt_retrain）：可见性强化 prompt 版全量重训（从基座，新口径独立成组，不与旧口径混比）。
+# 说明：改 prompt 必须"训练+评测同口径"，且现役 adapter 只懂旧 prompt，故从基座重训。
+#   数据 = experiments/qwen3vl8b/badcase_study/prompt_retrain_data/deepfashion_attr_json_prompt_retrain_train（强化可见性 Rules）。
+# 运行（3 卡 DDP，等效 batch = 4×3×3 = 36，与主线一致）：
+#   CUDA_VISIBLE_DEVICES=0,1,2 llamafactory-cli train experiments/qwen3vl8b/badcase_study/config/qwen3vl8b_dfattr_prompt_retrain_train.yaml
+stage: sft
+do_train: true
+model_name_or_path: models/Qwen3-VL-8B-Instruct
+preprocessing_num_workers: 8
+finetuning_type: lora
+template: qwen3_vl_nothink
+flash_attn: auto
+dataset_dir: experiments/qwen3vl8b/badcase_study/prompt_retrain_data
+dataset: deepfashion_attr_json_prompt_retrain_train
+cutoff_len: 2048
+learning_rate: 0.0001
+num_train_epochs: 3.0
+max_samples: 100000
+seed: 42
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 3
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
+logging_steps: 10
+save_steps: 1000
+warmup_steps: 150
+packing: false
+enable_thinking: true
+report_to: none
+output_dir: experiments/qwen3vl8b/badcase_study/weights/prompt_retrain_lora
+bf16: true
+plot_loss: true
+trust_remote_code: true
+ddp_timeout: 180000000
+include_num_input_tokens_seen: true
+optim: adamw_torch
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+image_max_pixels: 825750
+image_min_pixels: 1024
+video_max_pixels: 65536
+video_min_pixels: 256
+val_size: 0.05
+eval_strategy: steps
+eval_steps: 100
+per_device_eval_batch_size: 4

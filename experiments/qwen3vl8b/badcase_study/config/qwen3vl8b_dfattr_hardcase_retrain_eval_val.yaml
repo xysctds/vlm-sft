@@ -1,0 +1,33 @@
+# 难例续训评测（val，原口径）：加载难例续训后的 adapter（hardcase_retrain_lora），在**原 val 数据**
+# （旧 schema prompt）上生成预测。与主模型 preds_val_lora 同一评测数据/口径，可比对提升。
+# 运行：CUDA_VISIBLE_DEVICES=0 llamafactory-cli train <this>
+#   之后：python scripts/convert_preds.py --preds experiments/qwen3vl8b/badcase_study/predictions/hardcase_retrain_val/generated_predictions.jsonl \
+#           --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl \
+#           --out experiments/qwen3vl8b/badcase_study/reports/preds_hardcase_retrain_val.jsonl
+#   打分：python scripts/eval_attr.py stats \
+#           --base experiments/qwen3vl8b/main/reports/preds_val_lora.jsonl \   # 主模型作为"基准"
+#           --lora experiments/qwen3vl8b/badcase_study/reports/preds_hardcase_retrain_val.jsonl \
+#           --out experiments/qwen3vl8b/badcase_study/reports/report_hardcase_retrain_vs_main_val.md
+stage: sft
+model_name_or_path: models/Qwen3-VL-8B-Instruct
+adapter_name_or_path: experiments/qwen3vl8b/badcase_study/weights/hardcase_retrain_lora
+preprocessing_num_workers: 4
+finetuning_type: lora
+quantization_method: bnb
+template: qwen3_vl_nothink
+flash_attn: auto
+dataset_dir: data/data_convert/deepfashion_multi
+eval_dataset: deepfashion_attr_json_val
+cutoff_len: 2048
+max_samples: 100000
+per_device_eval_batch_size: 4
+predict_with_generate: true
+report_to: none
+max_new_tokens: 512
+do_sample: false
+seed: 42
+image_max_pixels: 825750
+output_dir: experiments/qwen3vl8b/badcase_study/predictions/hardcase_retrain_val
+trust_remote_code: true
+ddp_timeout: 180000000
+do_predict: true

@@ -1,6 +1,6 @@
 # vlm-sft —— Qwen3-VL 服装属性抽取 LoRA 微调
 
-> **主线**：基于 Qwen3-VL-8B-Instruct，对 DeepFashion-MultiModal（4.4 万图、18 维官方标注属性）做 LoRA 微调，实现「服装全身图 → 结构化属性 JSON」抽取（schema 感知指令 + 自建评测体系），并在此基础上落地**全库相似款检索推荐**，形成「电商标注 + 相似款推荐」完整闭环。
+> **主线**：基于 Qwen3-VL-8B-Instruct，对 DeepFashion-MultiModal（4.4 万图、18 维官方标注属性）做 LoRA 微调，实现「服装全身图 → 结构化属性 JSON」抽取（schema 感知指令 + 自建评测体系），并在此基础上落地**全库相似款检索**，形成「电商标注 + 相似款检索」完整闭环。
 
 **核心成果**（test 集 4,410 张未见图，基座 0-shot vs LoRA 微调）：
 
@@ -14,11 +14,14 @@
 - 18 个属性全部通过 McNemar 显著性检验（p<0.001）；
 - 消融证明 **schema 感知指令是决定性方法**（同数据下比朴素指令 +31.5pp）、训练无过拟合、推理对分辨率鲁棒；
 
+> 口径说明：本表是首页摘要。指标的**定义**以[主文档](docs/技术报告.md) §6.1 为准，
+> 指标的**数值**以 `experiments/qwen3vl8b/main/reports/` 下脚本生成的报告为准，首页不复述明细。
+
 ## 效果演示
 
 ![属性抽取 + 相似款检索 demo](docs/images/demo.jpeg)
 
-📄 **文档**：[技术方案与实验报告](docs/DeepFashion技术方案与实验报告.md)（主文档）｜ [检索/推荐闭环说明](docs/检索推荐说明.md) ｜ [部署说明](docs/部署说明.md) ｜ [数据说明](docs/数据说明.md) ｜ [调参说明](docs/调参说明.md)
+📄 **文档**：[技术报告](docs/技术报告.md)（主文档）｜ [检索说明](docs/检索说明.md) ｜ [部署说明](docs/部署说明.md) ｜ [数据说明](docs/数据说明.md) ｜ [训练说明](docs/训练说明.md) ｜ [错误分析](docs/错误分析.md)
 
 ---
 
@@ -46,27 +49,42 @@ vlm/
 ### docs/
 项目文档（主文档 + 实现说明 + 运维手册）：
 
-- `DeepFashion技术方案与实验报告.md`：**主文档**——技术方案 + 实验报告合稿（背景、数据、方法、评测、结果论证链、badcase、检索闭环、部署、复现），投递/答辩/复盘都用这一份。
-- `检索推荐说明.md`：**实现说明**——图 → 属性 → 全库相似款检索闭环（检索管线、工程纪律、落地产物）。
+- `技术报告.md`：**主文档**——技术方案 + 实验报告合稿（背景、数据、方法、评测、结果论证链、badcase、检索闭环、部署、复现），投递/答辩/复盘都用这一份。
+- `检索说明.md`：**实现说明**——图 → 属性 → 全库相似款检索闭环（检索管线、工程纪律、落地产物）。
 - `部署说明.md`：**服务化部署手册**——环境准备、单卡/多卡（TP=2 + 128k）启动、OpenAI 兼容 API、Gradio Web 页面、踩坑记录。
 - `数据说明.md`：数据转换与 LLaMA-Factory 接入，**含 18 维属性对照表（唯一权威属性来源）**。
-- `调参说明.md`：训练超参与调参经验记录。
-- `badcase_samples/`：主文档引用的典型错误样本示例图。
+- `训练说明.md`：训练超参与调参经验记录。
+- `错误分析.md`：坏例的样本级诊断 + 三条干预路线的实测（两条负结果）；实验代码与产物在
+  `experiments/qwen3vl8b/badcase_study/`。
+- `错误样本/`：主文档引用的典型错误样本示例图。
 
 ### experiments/（实验工作台）
 两级规则：**`experiments/<基座>/<实验域>/`**，每个域自成一个目录（`config/` `scripts/` `weights/` `predictions/` `reports/`）。
 运行一律在仓库根执行，路径全部为仓库内相对路径。
+
+每个实验域都有一个 `README.md` 作为入口（人写），说明该域做什么、怎么跑、结果在哪；
+域内 `reports/` 下的 md 则是脚本生成的评测报告，不要手改。
 
 - `qwen3vl8b/`：**Qwen3-VL-8B-Instruct 基线**（第一轮主实验）
   - `main/`：**主实验**——训练/导出/全部评测变体（val/test、few-shot、simple-prompt、压缩分辨率）。
     `weights/lora/` 实体适配器（git 忽略）、`weights/merged/` 合并模型（**软链**）、`predictions/logs/` 推理日志。
   - `ablation/`：**指令范式消融**（schema/simple × 5k/20k/35k）——`run_ablate_*` 训练调度 + `summarize_ablation`。
   - `ckpt_screen/`：**checkpoint 快筛/确认**——`ckpt_*.yaml` 由 `generate_ckpt_yamls.py` 自动生成。
-  - `smoke/`：30G 训练验证、token/显存基准。
+  - `badcase_study/`：**坏例诊断与干预实证**——样本级坏例分析 → 难例续训（负结果）→ 约束解码可救性 → 强化 prompt 重训（未跑完）。
+  - `smoke/`：训练可行性验证、token/显存基准（不属于主结果）。
 - `llamaboard_cache/`：WebUI 缓存（git 忽略）。
 
 > 说明：`experiments/*/*/weights/`、`predictions/` 及预测/日志类产物均 git 忽略；配置与报告 md 入库。
 > `experiments/*/*/scripts/` 里的脚本一律用「相对自身位置回推仓库根」，移动目录后无需改脚本主体。
+
+**指标口径只保留一份权威版本**，避免同一数据在多处维护：
+
+| 内容 | 唯一权威位置 |
+|---|---|
+| 指标定义（全匹配 / 属性 acc / macro-F1 / McNemar） | `docs/技术报告.md` §6.1；实现见 `scripts/eval_attr.py` |
+| 指标数值 | `experiments/**/reports/*.md`（由脚本从 `preds_*.jsonl` 算出，不手工填写） |
+| 各实验域做什么、怎么跑 | 各域 `README.md`（只做导航，不复述数值） |
+| 叙述性结论与论证链 | `docs/` 下的主文档与专题报告 |
 
 ### scripts/
 **通用脚本**（跨实验共用：数据转换 / 评测打分 / 部署 / 检索）；实验专属脚本已随实验归入各自

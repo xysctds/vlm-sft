@@ -1,0 +1,44 @@
+{
+  "deepfashion_attr_json_prompt_retrain_train": {
+    "file_name": "deepfashion_attr_json_prompt_retrain_train.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages",
+      "images": "images"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant"
+    }
+  },
+  "deepfashion_attr_json_prompt_retrain_val": {
+    "file_name": "deepfashion_attr_json_prompt_retrain_val.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages",
+      "images": "images"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant"
+    }
+  },
+  "deepfashion_attr_json_prompt_retrain_test": {
+    "file_name": "deepfashion_attr_json_prompt_retrain_test.jsonl",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages",
+      "images": "images"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant"
+    }
+  }
+}

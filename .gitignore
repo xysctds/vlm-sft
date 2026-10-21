@@ -4,9 +4,9 @@
 /scratch/
 backup
 
-# 外部资产（软链）
-data
-models
+# 外部资产（软链）——锚定到仓库根，避免连带忽略 experiments 下同名的 data/ 目录
+/data
+/models
 
 # 工具目录
 __pycache__/
@@ -23,8 +23,11 @@ experiments/*/*/reports/eval_*.log
 experiments/*/*/config/ckpt_*.yaml
 experiments/*/smoke/*.csv
 
-# badcase_opt 整体不入库（历史上就未跟踪）
-experiments/*/badcase_opt
+# badcase_study：代码/配置/报告入库，派生数据集与图片软链不入库
+# （weights/、predictions/、reports/preds_*.jsonl、*.log 已被上面的通用规则覆盖）
+experiments/*/badcase_study/hardcase_data/*.jsonl
+experiments/*/badcase_study/prompt_retrain_data/*.jsonl
+experiments/*/badcase_study/*/images
 
 # 工具缓存
 experiments/llamaboard_cache/

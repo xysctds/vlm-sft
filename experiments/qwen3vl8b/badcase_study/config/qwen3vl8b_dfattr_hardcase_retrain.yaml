@@ -1,0 +1,54 @@
+# 难例续训（hardcase_retrain）：在现役最终 LoRA adapter 上，用难例增强训练集低 lr 续训。
+# 目标：强化"多/漏键存在性判断 + 长尾稀有类"，不改 prompt、不改评测口径。
+# 关键点：
+#   - adapter_name_or_path = 现役最终 adapter（experiments/qwen3vl8b/main/weights/lora/qwen3vl8b_dfattr_lora）
+#   - create_new_adapter 默认 false => resume lora training（在现役 adapter 上继续，而非从 0 新建）
+#   - dataset_dir/dataset = 难例集（experiments/qwen3vl8b/badcase_study/hardcase_data）
+#   - 低 lr（3e-5）、短步数，防止灾难性遗忘；output 到独立目录，不覆盖主模型
+# 运行（3 卡 DDP）：
+#   llamafactory-cli train experiments/qwen3vl8b/badcase_study/config/qwen3vl8b_dfattr_hardcase_retrain.yaml
+stage: sft
+do_train: true
+model_name_or_path: models/Qwen3-VL-8B-Instruct
+adapter_name_or_path: experiments/qwen3vl8b/main/weights/lora/qwen3vl8b_dfattr_lora
+preprocessing_num_workers: 4
+finetuning_type: lora
+quantization_method: bnb   # 与主模型一致：quantization_bit=none => bf16 不量化
+template: qwen3_vl_nothink
+flash_attn: auto
+dataset_dir: experiments/qwen3vl8b/badcase_study/hardcase_data
+dataset: deepfashion_attr_json_hard_train
+cutoff_len: 2048
+learning_rate: 3e-5        # 二次微调低 lr
+num_train_epochs: 2.0      # 难例集 7844，2 epoch 步数可控
+max_samples: 100000
+seed: 42
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 3   # 3 卡 DDP 等效 batch 36
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
+logging_steps: 10
+save_steps: 200
+warmup_steps: 30
+packing: false
+enable_thinking: true
+report_to: none
+output_dir: experiments/qwen3vl8b/badcase_study/weights/hardcase_retrain_lora
+bf16: true
+plot_loss: true
+trust_remote_code: true
+ddp_timeout: 180000000
+include_num_input_tokens_seen: true
+optim: adamw_torch
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+image_max_pixels: 825750
+image_min_pixels: 1024
+video_max_pixels: 65536
+video_min_pixels: 256
+val_size: 0.0               # 不画 val loss（难例集小，评测用真实 val）
+eval_strategy: "no"

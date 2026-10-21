@@ -1,0 +1,29 @@
+# 强化 prompt 重训评测（val）：加载 prompt_retrain adapter + 强化 prompt 版 val 数据（新口径自洽）。
+# 注意：与旧口径 (main report) 不直接混比；作独立增量组，按各自口径对比 prompt_retrain / 难例续训 / 主模型。
+# 运行：CUDA_VISIBLE_DEVICES=0 llamafactory-cli train <this>
+#   之后：python scripts/convert_preds.py --preds experiments/qwen3vl8b/badcase_study/predictions/prompt_retrain_val/generated_predictions.jsonl \
+#           --data experiments/qwen3vl8b/badcase_study/prompt_retrain_data/deepfashion_attr_json_prompt_retrain_val.jsonl \
+#           --out experiments/qwen3vl8b/badcase_study/reports/preds_p1_val.jsonl
+stage: sft
+model_name_or_path: models/Qwen3-VL-8B-Instruct
+adapter_name_or_path: experiments/qwen3vl8b/badcase_study/weights/prompt_retrain_lora
+preprocessing_num_workers: 4
+finetuning_type: lora
+quantization_method: bnb
+template: qwen3_vl_nothink
+flash_attn: auto
+dataset_dir: experiments/qwen3vl8b/badcase_study/prompt_retrain_data
+eval_dataset: deepfashion_attr_json_prompt_retrain_val
+cutoff_len: 2048
+max_samples: 100000
+per_device_eval_batch_size: 4
+predict_with_generate: true
+report_to: none
+max_new_tokens: 512
+do_sample: false
+seed: 42
+image_max_pixels: 825750
+output_dir: experiments/qwen3vl8b/badcase_study/predictions/prompt_retrain_val
+trust_remote_code: true
+ddp_timeout: 180000000
+do_predict: true
