@@ -54,20 +54,19 @@ vlm/
 - `badcase_samples/`：主文档引用的典型错误样本示例图。
 
 ### experiments/（实验工作台）
-按**实验**组织——每个实验的配置、评测预测、报告、权重自成一个目录。运行一律在仓库根执行，路径全部为仓库内相对路径。
+两级规则：**`experiments/<基座>/<实验域>/`**，每个域自成一个目录（`config/` `scripts/` `weights/` `predictions/` `reports/`）。
+运行一律在仓库根执行，路径全部为仓库内相对路径。
 
-- `main/`：**主实验**——训练/导出/全部评测变体（val/test、few-shot、simple-prompt、压缩分辨率）。
-  - `config/`：训练/导出/评测配置；`predictions/`：评测生成预测 + `logs/`（推理/评测日志）；`reports/`：preds + 各报告（report_val/test/category/resolution/supplement）。
-  - `scripts/`：few-shot 数据生成（data_convert_fewshot_val）+ 品类/分辨率/补充实验报告生成（summarize_category / summarize_resolution / summarize_supplement）。
-  - `weights/lora/`：LoRA 适配器与全部 checkpoint（**实体**，15G，git 忽略）。
-  - `weights/merged/`：合并后完整模型（**软链**，目标见下方「软链清单」；17G 不进仓库）。
-  - `weights/logs/`：训练日志（各实验统一约定：训练日志进 `weights/logs/`，推理/评测日志进 `predictions/logs/`）。
-- `ablation/`：**指令范式消融**（schema/simple × 5k/20k/35k）——config + scripts（run_ablate_* 训练调度 / summarize_ablation）+ predictions + reports（report_ablation）+ weights（实体 5.4G）。
-- `ckpt_screen/`：**checkpoint 快筛/确认**——config（ckpt_*.yaml 由 scripts/generate_ckpt_yamls.py 自动生成）+ scripts（generate_ckpt_yamls / run_screen / summarize_ckpts / summarize_confirm）+ predictions + reports（report_ckpt_screen/confirm）+ weights（实体）。
-- `smoke/`：**验证实验**——30G 训练验证、token/显存基准（train_3gpu_verify*.yaml + bench_tokens_mem / bench_gpu_mem + 日志）+ weights（实体）。
+- `qwen3vl8b/`：**Qwen3-VL-8B-Instruct 基线**（第一轮主实验）
+  - `main/`：**主实验**——训练/导出/全部评测变体（val/test、few-shot、simple-prompt、压缩分辨率）。
+    `weights/lora/` 实体适配器（git 忽略）、`weights/merged/` 合并模型（**软链**）、`predictions/logs/` 推理日志。
+  - `ablation/`：**指令范式消融**（schema/simple × 5k/20k/35k）——`run_ablate_*` 训练调度 + `summarize_ablation`。
+  - `ckpt_screen/`：**checkpoint 快筛/确认**——`ckpt_*.yaml` 由 `generate_ckpt_yamls.py` 自动生成。
+  - `smoke/`：30G 训练验证、token/显存基准。
 - `llamaboard_cache/`：WebUI 缓存（git 忽略）。
 
-> 说明：`experiments/*/weights/`、`predictions/` 及预测/日志类产物均 git 忽略；配置与报告 md 入库。
+> 说明：`experiments/*/*/weights/`、`predictions/` 及预测/日志类产物均 git 忽略；配置与报告 md 入库。
+> `experiments/*/*/scripts/` 里的脚本一律用「相对自身位置回推仓库根」，移动目录后无需改脚本主体。
 
 ### scripts/
 **通用脚本**（跨实验共用：数据转换 / 评测打分 / 部署 / 检索）；实验专属脚本已随实验归入各自
@@ -93,9 +92,9 @@ vlm/
 |---|---|---|
 | `data/` | `scratch/maotai/data/vlm_data` | 数据集（原始+转换+检索索引） |
 | `models/` | `scratch/maotai/models` | 模型（基座 `Qwen3-VL-8B-Instruct` / `Qwen3-VL-32B-Instruct` / `Qwen2.5-1.5B-Instruct` + `merged/`） |
-| `experiments/main/weights/merged/` | `scratch/maotai/models/merged` | 合并后完整模型（17G） |
+| `experiments/qwen3vl8b/main/weights/merged/` | `scratch/maotai/models/merged` | 合并后完整模型（17G） |
 
-**换机/迁移**：保留相对路径约定，只重建以上 3 条软链即可（`data/`、`models/`、`experiments/main/weights/merged/`）。
+**换机/迁移**：保留相对路径约定，只重建以上 3 条软链即可（`data/`、`models/`、`experiments/qwen3vl8b/main/weights/merged/`）。
 
 ---
 
@@ -116,7 +115,7 @@ vlm/
 
 | 项 | 约定 |
 |---|---|
-| 仓库内数据/产物路径 | 相对仓库根（`data/`、`experiments/main/predictions/` 等），直接可用 |
+| 仓库内数据/产物路径 | 相对仓库根（`data/`、`experiments/qwen3vl8b/main/predictions/` 等），直接可用 |
 | 基座模型 | 放到 `models/Qwen3-VL-8B-Instruct`（全部训练/评测/导出配置中 `model_name_or_path` 均写此相对路径，在仓库根运行即按本地目录加载） |
 
 > **注意**：本仓库 llamafactory 的 CLI 用 `OmegaConf.to_container` 读配置，**不解析 `${oc.env:...}` 插值**（OmegaConf 2.3.x 的 `to_container` 默认不 resolve 插值，`${oc.env:LLM_MODEL_PATH, ...}` 会原样传给 HF 导致启动失败），因此配置中**直接写相对路径**、不要用插值写法；换机/发布时把模型软链到仓库 `models/Qwen3-VL-8B-Instruct` 即可（`grep -rn "model_name_or_path" experiments` 可找到全部位置）。

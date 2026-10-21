@@ -27,7 +27,7 @@
 
 输出写在解压数据集旁边，图片路径保持相对（``images/<name>.jpg``）。
 注册方式：``dataset_dir: data/data_convert/deepfashion_multi``
-（参见 ``experiments/main/config/qwen3vl8b_dfattr_train.yaml``）。
+（参见 ``experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_train.yaml``）。
 
 用法::
 

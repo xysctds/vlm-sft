@@ -4,7 +4,7 @@
 
 依赖 vLLM 服务已启动（完整命令见 docs/部署说明.md）::
 
-    vllm serve experiments/main/weights/merged/qwen3vl8b_dfattr_merged \\
+    vllm serve experiments/qwen3vl8b/main/weights/merged/qwen3vl8b_dfattr_merged \\
         --served-model-name deepfashion --port 8000 --max-model-len 32768
 
 启动本页面（跑在 **vllm** 环境：部署环境已重建为纯部署用途，gradio 6 与 starlette 1.6 完全兼容）::

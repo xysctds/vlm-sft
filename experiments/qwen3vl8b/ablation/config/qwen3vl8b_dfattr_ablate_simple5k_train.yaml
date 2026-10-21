@@ -1,0 +1,46 @@
+# 指令范式消融 - simple 5k（基于主训练参数；唯一差异：dataset 用 simple、max_samples 5000）
+stage: sft
+do_train: true
+model_name_or_path: models/Qwen3-VL-8B-Instruct
+preprocessing_num_workers: 16
+finetuning_type: lora
+template: qwen3_vl_nothink
+flash_attn: auto
+dataset_dir: data/data_convert/deepfashion_multi
+dataset: deepfashion_attr_json_simple_train
+cutoff_len: 2048
+learning_rate: 0.0001
+num_train_epochs: 3.0
+max_samples: 5000
+seed: 42
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 3   # 3 卡 DDP 等效 batch 36（4×3×3，与主训练完全一致）
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
+logging_steps: 10
+save_steps: 1000   # 消融只需最终模型
+warmup_steps: 20   # 5k 数据 3 epoch ≈ 396 步，warmup ~5%
+packing: false
+enable_thinking: true
+report_to: none
+output_dir: experiments/qwen3vl8b/ablation/weights/simple_5k
+bf16: true
+plot_loss: true
+trust_remote_code: true
+ddp_timeout: 180000000
+include_num_input_tokens_seen: true
+optim: adamw_torch
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+image_max_pixels: 825750
+image_min_pixels: 1024
+video_max_pixels: 65536
+video_min_pixels: 256
+val_size: 0.05
+eval_strategy: steps
+eval_steps: 100
+per_device_eval_batch_size: 4

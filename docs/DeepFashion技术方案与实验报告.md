@@ -206,7 +206,7 @@ Rules:
 | 1. schema 健全 | sharegpt 结构、`<image>` 占位符、图片文件存在 | ✅ |
 | 2. 答案合法 | assistant JSON 可解析、键/值在官方表内、无空答案 | ✅ |
 | 3. 防泄漏 | train/val/test 三侧图片两两零重叠 | ✅ |
-| 4. 分布统计 | 每属性类别分布（不均衡预览）→ `experiments/main/reports/data_stats.json` | ✅ |
+| 4. 分布统计 | 每属性类别分布（不均衡预览）→ `experiments/qwen3vl8b/main/reports/data_stats.json` | ✅ |
 
 已知不均衡点（影响评测设计）：多分类属性（sleeve_length/neckline/fabric/pattern）长尾明显（如 `suspenders`、`furry` 样本少）；评测用 macro-F1 + 分层，避免被 majority 类掩盖。
 
@@ -235,7 +235,7 @@ Rules:
 
 ### 5.2 微调方案：LoRA + 冻结视觉塔
 
-**LoRA 微调（实际训练记录 `experiments/main/weights/lora/qwen3vl8b_dfattr_lora/training_args.yaml`）**
+**LoRA 微调（实际训练记录 `experiments/qwen3vl8b/main/weights/lora/qwen3vl8b_dfattr_lora/training_args.yaml`）**
 
 | 项 | 配置 |
 |---|---|
@@ -284,7 +284,7 @@ Rules:
 
 ```bash
 # 训练（单机多卡自动走 DDP，默认用全部可见 GPU；本机 3 卡，等效 batch = 4×3×3 = 36）
-llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_train_cli.yaml
+llamafactory-cli train experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_train_cli.yaml
 # 单卡：CUDA_VISIBLE_DEVICES=0 限制，并把配置文件里 gradient_accumulation_steps 改为 9
 ```
 
@@ -343,18 +343,18 @@ llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_train_cli.yaml
 
 ```bash
 # ===== 开发阶段（模型选择/验证）：val 集，可反复跑 =====
-llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_eval_val_base.yaml   # base
-llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_eval_val_lora.yaml   # lora（两份配置除 adapter 外完全一致）
-python scripts/convert_preds.py --preds experiments/main/predictions/val_base/generated_predictions.jsonl \
-    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out experiments/main/reports/preds_val_base.jsonl
-python scripts/convert_preds.py --preds experiments/main/predictions/val_lora/generated_predictions.jsonl \
-    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out experiments/main/reports/preds_val_lora.jsonl
-python scripts/eval_attr.py stats --base experiments/main/reports/preds_val_base.jsonl \
-    --lora experiments/main/reports/preds_val_lora.jsonl --out experiments/main/reports/report_val.md
+llamafactory-cli train experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_eval_val_base.yaml   # base
+llamafactory-cli train experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_eval_val_lora.yaml   # lora（两份配置除 adapter 外完全一致）
+python scripts/convert_preds.py --preds experiments/qwen3vl8b/main/predictions/val_base/generated_predictions.jsonl \
+    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out experiments/qwen3vl8b/main/reports/preds_val_base.jsonl
+python scripts/convert_preds.py --preds experiments/qwen3vl8b/main/predictions/val_lora/generated_predictions.jsonl \
+    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out experiments/qwen3vl8b/main/reports/preds_val_lora.jsonl
+python scripts/eval_attr.py stats --base experiments/qwen3vl8b/main/reports/preds_val_base.jsonl \
+    --lora experiments/qwen3vl8b/main/reports/preds_val_lora.jsonl --out experiments/qwen3vl8b/main/reports/report_val.md
 
 # ===== 最终报告：test 集，全程只碰一次 =====
 # 复制 val 两份配置为 test 版（eval_dataset 改 deepfashion_attr_json_test），重复上面步骤，
-# 产出 experiments/main/reports/report_test.md。
+# 产出 experiments/qwen3vl8b/main/reports/report_test.md。
 ```
 
 ---
@@ -560,14 +560,14 @@ python scripts/eval_attr.py stats --base experiments/main/reports/preds_val_base
 ## 10. 部署与 Demo
 
 ```bash
-# 1) 合并 adapter（experiments/main/config/qwen3vl8b_dfattr_export_cli.yaml）
-llamafactory-cli export experiments/main/config/qwen3vl8b_dfattr_export_cli.yaml
+# 1) 合并 adapter（experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_export_cli.yaml）
+llamafactory-cli export experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_export_cli.yaml
 
 # 2) vLLM 服务（推荐一键脚本 bash scripts/start_vllm.sh；手动须在仓库根目录且设环境变量）
 conda activate vllm
 export CUDA_HOME=/home/maotai/.conda/envs/vllm/lib/python3.11/site-packages/nvidia/cu13
 export VLLM_USE_FLASHINFER_SAMPLER=0   # 必须禁用 flashinfer 采样器（见部署说明 §5.4）
-vllm serve experiments/main/weights/merged/qwen3vl8b_dfattr_merged \
+vllm serve experiments/qwen3vl8b/main/weights/merged/qwen3vl8b_dfattr_merged \
     --served-model-name deepfashion --port 8000 --gpu-memory-utilization 0.55 \
     --max-model-len 131072 --tensor-parallel-size 2   # 多卡 TP=2 + 128k；单卡去掉 TP 并把 max-model-len 改 32768
 
@@ -627,8 +627,8 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 
 | 路径 | 内容 |
 |---|---|
-| `experiments/main/config/`（及 `experiments/ablation/config/`、`experiments/ckpt_screen/config/`） | 训练/评测/导出配置（`main/`、`ablation/`、`ckpt_screen/` 子目录） |
-| `experiments/main/weights/`（`lora/`、`merged/`） | 模型权重与训练日志（LoRA adapter / merged；软链至 /disk16T1） |
+| `experiments/qwen3vl8b/main/config/`（及 `experiments/qwen3vl8b/ablation/config/`、`experiments/qwen3vl8b/ckpt_screen/config/`） | 训练/评测/导出配置（`main/`、`ablation/`、`ckpt_screen/` 子目录） |
+| `experiments/qwen3vl8b/main/weights/`（`lora/`、`merged/`） | 模型权重与训练日志（LoRA adapter / merged；软链至 /disk16T1） |
 
 **③ 评测**
 
@@ -636,8 +636,8 @@ python scripts/serve_gradio.py                                 # Web 页面 → 
 |---|---|
 | `scripts/convert_preds.py` | 把 llamafactory predict 输出（`generated_predictions.jsonl`）转为 `eval_attr.py stats` 可消费的预测文件 |
 | `scripts/eval_attr.py` | 评测打分：`stats`（属性级 acc / macro-F1 / 分层 / McNemar）；预测生成走 llamafactory 管线（口径见 §5.5 / §6.3） |
-| `experiments/main/predictions/` | 评测生成预测（`generated_predictions.jsonl` 等，按实验分目录） |
-| `experiments/main/reports/`（及 `experiments/ablation/reports/`、`experiments/ckpt_screen/reports/`） | 评测汇总与评测日志（`preds_*.jsonl`、报告、数据统计、`eval_*.log`） |
+| `experiments/qwen3vl8b/main/predictions/` | 评测生成预测（`generated_predictions.jsonl` 等，按实验分目录） |
+| `experiments/qwen3vl8b/main/reports/`（及 `experiments/qwen3vl8b/ablation/reports/`、`experiments/qwen3vl8b/ckpt_screen/reports/`） | 评测汇总与评测日志（`preds_*.jsonl`、报告、数据统计、`eval_*.log`） |
 
 **④ 检索与部署**
 
@@ -676,29 +676,29 @@ python scripts/check_data.py                  # 四关卡，退出码 0 才继�
 **③ 训练**（单机多卡自动 DDP，默认全部可见 GPU；本机 3 卡，等效 batch = 4×3×3 = 36）
 
 ```bash
-llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_train_cli.yaml
+llamafactory-cli train experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_train_cli.yaml
 # 单卡：CUDA_VISIBLE_DEVICES=0，并把 gradient_accumulation_steps 改为 9
 ```
 
 **④ 消融**（指令范式 × 数据量，见 §5.6 / §7.2）
 
 ```bash
-# 训练：experiments/ablation/config/*.yaml（schema/simple × 5k/20k/35k）
-# 打分：同 ⑤，产物在 experiments/ablation/reports/report_ablation.md
+# 训练：experiments/qwen3vl8b/ablation/config/*.yaml（schema/simple × 5k/20k/35k）
+# 打分：同 ⑤，产物在 experiments/qwen3vl8b/ablation/reports/report_ablation.md
 ```
 
 **⑤ 评测**（正式口径：llamafactory 管线生成预测 + `eval_attr.py stats` 打分，原理与边界见 §5.5）
 
 ```bash
 # 开发阶段：val 集，可反复跑（两份配置除 eval_dataset 外一致）
-llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_eval_val_base.yaml   # 基座 0-shot
-llamafactory-cli train experiments/main/config/qwen3vl8b_dfattr_eval_val_lora.yaml   # LoRA 微调后
-python scripts/convert_preds.py --preds experiments/main/predictions/val_base/generated_predictions.jsonl \
-    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out experiments/main/reports/preds_val_base.jsonl
-python scripts/convert_preds.py --preds experiments/main/predictions/val_lora/generated_predictions.jsonl \
-    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out experiments/main/reports/preds_val_lora.jsonl
-python scripts/eval_attr.py stats --base experiments/main/reports/preds_val_base.jsonl \
-    --lora experiments/main/reports/preds_val_lora.jsonl --out experiments/main/reports/report_val.md
+llamafactory-cli train experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_eval_val_base.yaml   # 基座 0-shot
+llamafactory-cli train experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_eval_val_lora.yaml   # LoRA 微调后
+python scripts/convert_preds.py --preds experiments/qwen3vl8b/main/predictions/val_base/generated_predictions.jsonl \
+    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out experiments/qwen3vl8b/main/reports/preds_val_base.jsonl
+python scripts/convert_preds.py --preds experiments/qwen3vl8b/main/predictions/val_lora/generated_predictions.jsonl \
+    --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl --out experiments/qwen3vl8b/main/reports/preds_val_lora.jsonl
+python scripts/eval_attr.py stats --base experiments/qwen3vl8b/main/reports/preds_val_base.jsonl \
+    --lora experiments/qwen3vl8b/main/reports/preds_val_lora.jsonl --out experiments/qwen3vl8b/main/reports/report_val.md
 
 # 最终报告：test 集，全程只碰一次（把 val 两份配置复制为 test 版，eval_dataset 改 deepfashion_attr_json_test）
 # 其余环节产物：report_test.md / report_ckpt_screen.md / report_ckpt_confirm.md \
@@ -714,9 +714,9 @@ python scripts/build_retrieval_index.py       # 建检索索引（官方标注�
 **⑦ 部署**（完整命令与环境准备见 §10 与 `docs/部署说明.md`）
 
 ```bash
-llamafactory-cli export experiments/main/config/qwen3vl8b_dfattr_export_cli.yaml
+llamafactory-cli export experiments/qwen3vl8b/main/config/qwen3vl8b_dfattr_export_cli.yaml
 conda activate vllm && export CUDA_HOME=/home/maotai/.conda/envs/vllm/lib/python3.11/site-packages/nvidia/cu13
-VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve experiments/main/weights/merged/qwen3vl8b_dfattr_merged \
+VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve experiments/qwen3vl8b/main/weights/merged/qwen3vl8b_dfattr_merged \
     --served-model-name deepfashion --port 8000 --max-model-len 32768
 python scripts/serve_demo.py --image <path/to/test.jpg>      # CLI
 python scripts/serve_gradio.py                                # Web → http://127.0.0.1:7860

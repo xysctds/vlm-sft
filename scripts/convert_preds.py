@@ -12,9 +12,9 @@ llamafactory predict 输出（output_dir/generated_predictions.jsonl）每行:
 用法::
 
     python scripts/convert_preds.py \\
-        --preds experiments/main/predictions/xxx/generated_predictions.jsonl \\
+        --preds experiments/qwen3vl8b/main/predictions/xxx/generated_predictions.jsonl \\
         --data data/data_convert/deepfashion_multi/deepfashion_attr_json_val.jsonl \\
-        --out experiments/main/reports/preds_lora.jsonl
+        --out experiments/qwen3vl8b/main/reports/preds_lora.jsonl
 
 注意：--data 必须与 llamafactory 配置的 eval_dataset/max_samples 完全一致
 （逐行顺序对应）。

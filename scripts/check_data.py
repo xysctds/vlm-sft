@@ -10,7 +10,7 @@
 
 用法::
 
-    python scripts/check_data.py --data data/data_convert/deepfashion_multi [--out experiments/main/reports]
+    python scripts/check_data.py --data data/data_convert/deepfashion_multi [--out experiments/qwen3vl8b/main/reports]
 
 任一关卡失败时退出码非 0。
 """
@@ -60,7 +60,7 @@ def load_jsonl(path: str) -> list[dict]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", default=DATA_DIR)
-    parser.add_argument("--out", default="experiments/main/reports")
+    parser.add_argument("--out", default="experiments/qwen3vl8b/main/reports")
     parser.add_argument("--sample-print", type=int, default=6, help="print this many rendered samples")
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)

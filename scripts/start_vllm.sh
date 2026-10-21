@@ -28,7 +28,7 @@ conda activate vllm
 export CUDA_HOME=/home/maotai/.conda/envs/vllm/lib/python3.11/site-packages/nvidia/cu13
 export VLLM_USE_FLASHINFER_SAMPLER=0
 
-MODEL="experiments/main/weights/merged/qwen3vl8b_dfattr_merged"
+MODEL="experiments/qwen3vl8b/main/weights/merged/qwen3vl8b_dfattr_merged"
 MODE="${1:-tp2}"
 
 case "$MODE" in

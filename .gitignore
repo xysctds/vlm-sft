@@ -13,13 +13,18 @@ __pycache__/
 *.pyc
 *.log
 
-# experiments/ 工作产物（按实验拆分后，配置/报告跟踪，权重/预测/缓存忽略）
-experiments/*/weights/
-experiments/*/predictions/
-experiments/llamaboard_cache/
-experiments/*/reports/preds_*.jsonl
-experiments/*/reports/eval_*.log
-experiments/ckpt_screen/config/ckpt_*.yaml
-experiments/smoke/*.csv
+# experiments/ 工作产物
+# 目录规则：experiments/<基座>/<实验域>/{config,scripts,weights,predictions,reports}
+# 配置与报告进 git，权重/预测/缓存不入库
+experiments/*/*/weights/
+experiments/*/*/predictions/
+experiments/*/*/reports/preds_*.jsonl
+experiments/*/*/reports/eval_*.log
+experiments/*/*/config/ckpt_*.yaml
+experiments/*/smoke/*.csv
 
-experiments/badcase_opt
+# badcase_opt 整体不入库（历史上就未跟踪）
+experiments/*/badcase_opt
+
+# 工具缓存
+experiments/llamaboard_cache/
